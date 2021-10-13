@@ -13,16 +13,26 @@ to generate this file without the comments in this block.
 { name = "my-project"
 , dependencies =
   [ "aff"
+  , "arrays"
   , "console"
+  , "debug"
   , "effect"
+  , "either"
   , "foreign"
   , "foreign-object"
   , "functions"
   , "httpure"
+  , "lists"
+  , "maybe"
+  , "node-buffer"
+  , "node-fs-aff"
+  , "node-path"
   , "options"
   , "prelude"
   , "psci-support"
+  , "strings"
   , "transformers"
+  , "tuples"
   ]
 , packages = ./packages.dhall
 , sources = [ "src/**/*.purs", "test/**/*.purs" ]
