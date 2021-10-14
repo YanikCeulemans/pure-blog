@@ -2,6 +2,7 @@ module Main where
 
 import Prelude
 
+import CSS as CSS
 import Control.Monad.Error.Class (try)
 import Control.Monad.Reader (class MonadAsk, ReaderT, runReaderT)
 import Control.Monad.Reader.Class (asks)
@@ -25,6 +26,7 @@ import HTTPure.Status as HTTPureStatus
 import Node.Encoding (Encoding(..))
 import Node.FS.Aff as FS
 import Node.Path as Path
+import Styles.Main as Styles
 
 type Env =
   { renderHtmlWithTemplate :: Obj.Object String -> String
@@ -44,11 +46,22 @@ indexRouter :: forall m. MonadAsk Env m => MonadAff m => HTTPure.Request -> m HT
 indexRouter request = do
   case request.path of
     [] -> renderIndex
+    [ "css", "styles.css" ] -> liftAff renderStyles
     [ "blog", slug ] -> renderBlogPost slug
     _ ->
       case List.fromFoldable request.path of
         "assets" : assetPath -> fileRouter "./static/assets" $ List.intercalate "/" assetPath
         _ -> renderNotFound
+
+renderStyles :: HTTPure.ResponseM
+renderStyles = do
+  CSS.render Styles.main
+    # CSS.renderedSheet
+    # case _ of
+      Just sheet ->
+        HTTPure.ok' (HTTPure.header "Content-Type" "text/css") sheet
+      Nothing ->
+        HTTPure.internalServerError "Internal server error"
 
 fileRouter :: forall m. MonadAff m => MonadAsk Env m => String -> String -> m HTTPure.Response
 fileRouter basePath filePath = do
@@ -89,6 +102,8 @@ renderIndex = do
 working with markdown
 
 a second paragraph?
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit. Donec ut velit gravida, pretium turpis eget, interdum ligula. Suspendisse tempor, ligula id pellentesque mollis, risus urna rutrum ex, eget scelerisque tortor lacus vitae lacus. Duis faucibus justo dolor, a faucibus eros laoreet sed. Morbi quis risus in nibh efficitur ullamcorper eget a risus. Proin nisi enim, mattis eu erat a, condimentum maximus dolor. Mauris a velit a ipsum accumsan tempus et eget mi. Mauris et fermentum orci, gravida convallis tortor. Fusce nec leo in tortor laoreet condimentum. Quisque fringilla tristique sodales.
     """
   okHtml $ renderHtmlWithTemplate $ Obj.fromHomogeneous { contents: indexContents }
 
