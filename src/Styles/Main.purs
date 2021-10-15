@@ -2,11 +2,20 @@ module Styles.Main where
 
 import Prelude
 
-import CSS (CSS, GenericFontFamily(..), Size(..), alignItems, backgroundColor, bold, byClass, color, display, element, flex, fontFamily, fontSize, fontWeight, fromInt, fromString, grid, key, margin, marginBottom, nil, padding, px, rem, star, (?), (|*))
+import CSS (class Val, CSS, Color, GenericFontFamily(..), Path(..), Refinement(..), Selector(..), Size(..), alignItems, backgroundColor, bold, byClass, color, column, display, element, flex, flexDirection, fontFamily, fontSize, fontWeight, fromInt, fromString, grid, key, margin, marginBottom, nil, padding, pseudo, px, rem, star, (&), (?), (|*))
 import CSS.Common (auto, center)
-import CSS.Selector (with)
 import Data.NonEmpty as NE
 import Data.Tuple.Nested (tuple2)
+
+nearlyWhite :: Color
+nearlyWhite = fromInt 0xdcdfe4
+
+gap :: forall a. Size a -> CSS
+gap = key (fromString "gap")
+
+gridTemplateRows :: forall a. Val a => a -> CSS
+gridTemplateRows =
+  key (fromString "grid-template-rows")
 
 main :: CSS
 main = do
@@ -21,18 +30,32 @@ main = do
           (GenericFontFamily $ fromString "Times")
           [ GenericFontFamily $ fromString "Serif" ]
     backgroundColor $ fromInt 0x282c34
-    color $ fromInt 0xdcdfe4
+    color nearlyWhite
     display grid
-    key (fromString "gap") $ rem 2.0
-    key (fromString "grid-template-rows") $ tuple2 (rem 5.0) (auto :: Size _)
+    gap $ rem 2.0
+    gridTemplateRows $ tuple2 (rem 5.0) (auto :: Size _)
 
   element "h1" ? do
     fontSize $ rem 5.2
     fontWeight $ bold
     marginBottom $ rem 2.0
 
+  element "h3" ? do
+    fontSize $ rem 4.2
+    fontWeight $ bold
+    marginBottom $ rem 1.5
+
   element "p" ? do
     margin (rem 1.0) nil (rem 1.0) nil
+
+  Selector (Refinement [])
+    (Combined (element "a") (element "a" & pseudo "hover")) ? do
+    color nearlyWhite
+
+  element "ol" ? do
+    display flex
+    flexDirection column
+    gap $ rem 1.0
 
   element "header" ? do
     display flex
@@ -49,5 +72,5 @@ main = do
   element "header" |* element "a" ? do
     color $ fromInt 0x333333
 
-  star `with` byClass "main-content" ? do
+  star & byClass "main-content" ? do
     padding nil (rem 2.0) nil (rem 2.0)

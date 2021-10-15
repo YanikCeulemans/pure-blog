@@ -1,0 +1,10 @@
+h1 Welcome to Unit 42
+p some explanation
+
+section.posts-index
+  ol
+    each post in posts
+      li
+        h3
+          a(href="/blog/" + post.name)= post.title
+        p !{post.summary}

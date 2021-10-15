@@ -3,28 +3,33 @@ module Main where
 import Prelude
 
 import CSS as CSS
-import Control.Monad.Error.Class (try)
+import Control.Monad.Error.Class (throwError, try)
 import Control.Monad.Reader (class MonadAsk, ReaderT, runReaderT)
 import Control.Monad.Reader.Class (asks)
+import Data.Argonaut as Json
 import Data.Array as Array
-import Data.Either (Either(..))
+import Data.Bifunctor (lmap)
+import Data.Either (Either(..), either)
 import Data.List ((:))
 import Data.List as List
 import Data.Maybe (Maybe(..))
 import Data.String as String
+import Data.Traversable (for)
 import Data.Tuple (Tuple(..))
 import Debug as Debug
-import Effect.Aff (Aff)
+import Effect.Aff (Aff, error)
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Class (liftEffect)
 import Effect.Class.Console as Console
 import Foreign.MarkdownIt as MD
 import Foreign.Object as Obj
 import Foreign.Pug as Pug
+import Foreign.Yaml as Yaml
 import HTTPure as HTTPure
 import HTTPure.Status as HTTPureStatus
 import Node.Encoding (Encoding(..))
 import Node.FS.Aff as FS
+import Node.Path (FilePath)
 import Node.Path as Path
 import Styles.Main as Styles
 
@@ -37,12 +42,18 @@ readerMiddleware
   -> HTTPure.Request
   -> HTTPure.ResponseM
 readerMiddleware router request = do
-  renderHtmlWithTemplate <- liftEffect $ Pug.compileFile' "./static/layout/main.pug"
+  renderHtmlWithTemplate <- liftEffect $ Pug.compileFile'
+    "./static/layout/main.pug"
   let
     env = { renderHtmlWithTemplate }
   runReaderT (router request) env
 
-indexRouter :: forall m. MonadAsk Env m => MonadAff m => HTTPure.Request -> m HTTPure.Response
+indexRouter
+  :: forall m
+   . MonadAsk Env m
+  => MonadAff m
+  => HTTPure.Request
+  -> m HTTPure.Response
 indexRouter request = do
   case request.path of
     [] -> renderIndex
@@ -50,7 +61,9 @@ indexRouter request = do
     [ "blog", slug ] -> renderBlogPost slug
     _ ->
       case List.fromFoldable request.path of
-        "assets" : assetPath -> fileRouter "./static/assets" $ List.intercalate "/" assetPath
+        "assets" : assetPath -> fileRouter "./static/assets" $ List.intercalate
+          "/"
+          assetPath
         _ -> renderNotFound
 
 renderStyles :: HTTPure.ResponseM
@@ -58,12 +71,18 @@ renderStyles = do
   CSS.render Styles.main
     # CSS.renderedSheet
     # case _ of
-      Just sheet ->
-        HTTPure.ok' (HTTPure.header "Content-Type" "text/css") sheet
-      Nothing ->
-        HTTPure.internalServerError "Internal server error"
+        Just sheet ->
+          HTTPure.ok' (HTTPure.header "Content-Type" "text/css") sheet
+        Nothing ->
+          HTTPure.internalServerError "Internal server error"
 
-fileRouter :: forall m. MonadAff m => MonadAsk Env m => String -> String -> m HTTPure.Response
+fileRouter
+  :: forall m
+   . MonadAff m
+  => MonadAsk Env m
+  => String
+  -> String
+  -> m HTTPure.Response
 fileRouter basePath filePath = do
   let
     fullPath = Path.concat [ basePath, filePath ]
@@ -90,34 +109,49 @@ mimeTypeFromPath =
   mimeTypeFromExtension "png" = Just "image/png"
   mimeTypeFromExtension _ = Nothing
 
-renderResource :: forall m. MonadAsk Env m => MonadAff m => String -> m HTTPure.Response
-renderResource _ = HTTPure.internalServerError "Internal server error: Not yet implemented"
+renderResource
+  :: forall m. MonadAsk Env m => MonadAff m => String -> m HTTPure.Response
+renderResource _ = HTTPure.internalServerError
+  "Internal server error: Not yet implemented"
 
 renderIndex :: forall m. MonadAsk Env m => MonadAff m => m HTTPure.Response
-renderIndex = do
-  renderHtmlWithTemplate <- asks _.renderHtmlWithTemplate
-  indexContents <- liftEffect $ MD.renderString
-    """
-# This is the index page
-working with markdown
+renderIndex =
+  do
+    renderHtmlWithTemplate <- asks _.renderHtmlWithTemplate
+    blogPostsIndex <- liftAff $ readBlogPostsIndex "./static/blog/index.yaml"
+    indexContents <- liftEffect $ Pug.renderFile "./static/pages/index.pug"
+      $ Json.encodeJson { posts: blogPostsIndex }
+    okHtml
+      $ renderHtmlWithTemplate
+      $ Obj.fromHomogeneous
+          { contents: indexContents }
 
-a second paragraph?
+type BlogPost =
+  { title :: String
+  , summary :: String
+  , name :: String
+  }
 
-Lorem ipsum dolor sit amet, consectetur adipiscing elit. Donec ut velit gravida, pretium turpis eget, interdum ligula. Suspendisse tempor, ligula id pellentesque mollis, risus urna rutrum ex, eget scelerisque tortor lacus vitae lacus. Duis faucibus justo dolor, a faucibus eros laoreet sed. Morbi quis risus in nibh efficitur ullamcorper eget a risus. Proin nisi enim, mattis eu erat a, condimentum maximus dolor. Mauris a velit a ipsum accumsan tempus et eget mi. Mauris et fermentum orci, gravida convallis tortor. Fusce nec leo in tortor laoreet condimentum. Quisque fringilla tristique sodales.
-    """
-  okHtml $ renderHtmlWithTemplate $ Obj.fromHomogeneous { contents: indexContents }
+readBlogPostsIndex :: FilePath -> Aff (Array BlogPost)
+readBlogPostsIndex indexFilePath = do
+  indexE <- Yaml.parse <$> FS.readTextFile UTF8 indexFilePath
+  either (throwError <<< error) pure $ indexE >>=
+    (Json.decodeJson >>> lmap Json.printJsonDecodeError)
 
-renderBlogPost :: forall m. MonadAsk Env m => MonadAff m => String -> m HTTPure.Response
+renderBlogPost
+  :: forall m. MonadAsk Env m => MonadAff m => String -> m HTTPure.Response
 renderBlogPost slug = do
   blogPostMarkdown <- loadBlogPostHtmlForSlug slug
   renderHtmlWithTemplate <- asks _.renderHtmlWithTemplate
-  okHtml $ renderHtmlWithTemplate $ Obj.fromHomogeneous { contents: blogPostMarkdown }
---HTTPure.ok $ "blog post for " <> slug
+  okHtml $ renderHtmlWithTemplate $ Obj.fromHomogeneous
+    { contents: blogPostMarkdown }
 
 loadBlogPostHtmlForSlug :: forall m. MonadAff m => String -> m String
 loadBlogPostHtmlForSlug slug = do
   -- TODO: Sanitize slug
-  postMarkdown <- liftAff $ FS.readTextFile UTF8 $ "./static/blog/posts/" <> slug <> ".md"
+  postMarkdown <- liftAff $ FS.readTextFile UTF8 $ "./static/blog/posts/"
+    <> slug
+    <> ".md"
   liftEffect $ MD.renderString postMarkdown
 
 renderNotFound :: forall m. MonadAsk Env m => MonadAff m => m HTTPure.Response
@@ -136,4 +170,5 @@ okHtml html =
 
 main :: HTTPure.ServerM
 main = do
-  HTTPure.serve 8080 (readerMiddleware indexRouter) $ Console.log "Server running on port 8080: http://localhost:8080"
+  HTTPure.serve 8080 (readerMiddleware indexRouter) $ Console.log
+    "Server running on port 8080: http://localhost:8080"
