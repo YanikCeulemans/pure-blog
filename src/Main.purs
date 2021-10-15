@@ -2,6 +2,8 @@ module Main where
 
 import Prelude
 
+import BlogPost (BlogPost)
+import BlogPost as BlogPost
 import CSS as CSS
 import Control.Monad.Error.Class (throwError, try)
 import Control.Monad.Reader (class MonadAsk, ReaderT, runReaderT)
@@ -9,12 +11,13 @@ import Control.Monad.Reader.Class (asks)
 import Data.Argonaut as Json
 import Data.Array as Array
 import Data.Bifunctor (lmap)
+import Data.Date (Date)
 import Data.Either (Either(..), either)
 import Data.List ((:))
 import Data.List as List
 import Data.Maybe (Maybe(..))
 import Data.String as String
-import Data.Traversable (for)
+import Data.Traversable (for, traverse)
 import Data.Tuple (Tuple(..))
 import Debug as Debug
 import Effect.Aff (Aff, error)
@@ -126,17 +129,16 @@ renderIndex =
       $ Obj.fromHomogeneous
           { contents: indexContents }
 
-type BlogPost =
-  { title :: String
-  , summary :: String
-  , name :: String
-  }
-
+-- TODO: This implementation is fugly
 readBlogPostsIndex :: FilePath -> Aff (Array BlogPost)
 readBlogPostsIndex indexFilePath = do
   indexE <- Yaml.parse <$> FS.readTextFile UTF8 indexFilePath
   either (throwError <<< error) pure $ indexE >>=
-    (Json.decodeJson >>> lmap Json.printJsonDecodeError)
+    ( (Json.decodeJson >>> lmap Json.printJsonDecodeError) >=>
+        ( traverse BlogPost.fromRawBlogPost >>> lmap
+            BlogPost.printBlogPostDecodeError
+        )
+    )
 
 renderBlogPost
   :: forall m. MonadAsk Env m => MonadAff m => String -> m HTTPure.Response

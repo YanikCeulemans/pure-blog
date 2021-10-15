@@ -1,5 +1,4 @@
-h1 Welcome to Unit 42
-p some explanation
+p A blog about mostly web related technologies
 
 section.posts-index
   ol
@@ -7,4 +6,5 @@ section.posts-index
       li
         h3
           a(href="/blog/" + post.name)= post.title
+        span.post-date= post.timestamp
         p !{post.summary}

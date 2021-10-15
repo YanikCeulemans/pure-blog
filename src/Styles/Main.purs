@@ -74,3 +74,6 @@ main = do
 
   star & byClass "main-content" ? do
     padding nil (rem 2.0) nil (rem 2.0)
+
+  star & byClass "post-date" ? do
+    color $ fromInt 0xaaaaaa
