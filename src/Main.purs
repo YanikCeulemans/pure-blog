@@ -5,25 +5,24 @@ import Prelude
 import BlogPost (BlogPost)
 import BlogPost as BlogPost
 import CSS as CSS
-import Control.Monad.Error.Class (throwError, try)
+import Control.Monad.Error.Class (catchError, throwError, try)
 import Control.Monad.Reader (class MonadAsk, ReaderT, runReaderT)
 import Control.Monad.Reader.Class (asks)
 import Data.Argonaut as Json
 import Data.Array as Array
 import Data.Bifunctor (lmap)
-import Data.Date (Date)
 import Data.Either (Either(..), either)
 import Data.List ((:))
 import Data.List as List
-import Data.Maybe (Maybe(..))
+import Data.Maybe (Maybe(..), fromMaybe)
 import Data.String as String
-import Data.Traversable (for, traverse)
+import Data.Traversable (traverse)
 import Data.Tuple (Tuple(..))
-import Debug as Debug
-import Effect.Aff (Aff, error)
+import Effect.Aff (Aff, Error, error, message)
 import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Class (liftEffect)
 import Effect.Class.Console as Console
+import Effect.Exception (stack)
 import Foreign.MarkdownIt as MD
 import Foreign.Object as Obj
 import Foreign.Pug as Pug
@@ -49,7 +48,27 @@ readerMiddleware router request = do
     "./static/layout/main.pug"
   let
     env = { renderHtmlWithTemplate }
-  runReaderT (router request) env
+  catchError
+    (runReaderT (router request) env)
+    (\error -> runReaderT (reportAndRenderErrorPage error) env)
+
+reportAndRenderErrorPage
+  :: forall m. MonadAsk Env m => MonadAff m => Error -> m HTTPure.Response
+reportAndRenderErrorPage error = do
+  let
+    errorMsg = fromMaybe (message error) $ stack error
+  Console.error $ "An uncaught error occurred: " <> errorMsg
+  renderHtmlWithTemplate <- asks _.renderHtmlWithTemplate
+  errorPage <- liftEffect $ Pug.renderFile "./static/pages/error.pug" $
+    Json.encodeJson
+      { error:
+          { status: 500
+          , message: "Internal server error"
+          }
+      }
+  HTTPure.internalServerError
+    $ renderHtmlWithTemplate
+    $ Obj.fromHomogeneous { contents: errorPage }
 
 indexRouter
   :: forall m
