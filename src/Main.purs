@@ -149,16 +149,14 @@ renderIndex =
       $ Json.encodeJson
           { contents: indexContents }
 
--- TODO: This implementation is fugly
 readBlogPostsIndex :: FilePath -> Aff (Array BlogPost)
 readBlogPostsIndex indexFilePath = do
-  indexE <- Yaml.parse <$> FS.readTextFile UTF8 indexFilePath
-  either (throwError <<< error) pure $ indexE >>=
-    ( (Json.decodeJson >>> lmap Json.printJsonDecodeError) >=>
-        ( traverse BlogPost.fromRawBlogPost >>> lmap
-            BlogPost.printBlogPostDecodeError
-        )
-    )
+  indexJsonE <- Yaml.parse <$> FS.readTextFile UTF8 indexFilePath
+  either (throwError <<< error) pure $ do
+    indexJson <- indexJsonE
+    rawBlogPosts <- lmap Json.printJsonDecodeError $ Json.decodeJson indexJson
+    lmap BlogPost.printBlogPostDecodeError
+      $ traverse BlogPost.fromRawBlogPost rawBlogPosts
 
 renderBlogPost
   :: forall m. MonadAsk Env m => MonadAff m => String -> m HTTPure.Response
