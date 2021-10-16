@@ -8,6 +8,7 @@ import CSS as CSS
 import Control.Monad.Error.Class (catchError, throwError, try)
 import Control.Monad.Reader (class MonadAsk, ReaderT, runReaderT)
 import Control.Monad.Reader.Class (asks)
+import Data.Argonaut (Json)
 import Data.Argonaut as Json
 import Data.Array as Array
 import Data.Bifunctor (lmap)
@@ -24,7 +25,7 @@ import Effect.Class (liftEffect)
 import Effect.Class.Console as Console
 import Effect.Exception (stack)
 import Foreign.MarkdownIt as MD
-import Foreign.Object as Obj
+import Foreign.Pug (HtmlBody)
 import Foreign.Pug as Pug
 import Foreign.Yaml as Yaml
 import HTTPure as HTTPure
@@ -36,7 +37,7 @@ import Node.Path as Path
 import Styles.Main as Styles
 
 type Env =
-  { renderHtmlWithTemplate :: Obj.Object String -> String
+  { renderHtmlWithTemplate :: Json -> HtmlBody
   }
 
 readerMiddleware
@@ -44,7 +45,7 @@ readerMiddleware
   -> HTTPure.Request
   -> HTTPure.ResponseM
 readerMiddleware router request = do
-  renderHtmlWithTemplate <- liftEffect $ Pug.compileFile'
+  renderHtmlWithTemplate <- liftEffect $ Pug.compileFile
     "./static/layout/main.pug"
   let
     env = { renderHtmlWithTemplate }
@@ -68,7 +69,7 @@ reportAndRenderErrorPage error = do
       }
   HTTPure.internalServerError
     $ renderHtmlWithTemplate
-    $ Obj.fromHomogeneous { contents: errorPage }
+    $ Json.encodeJson { contents: errorPage }
 
 indexRouter
   :: forall m
@@ -143,9 +144,9 @@ renderIndex =
     blogPostsIndex <- liftAff $ readBlogPostsIndex "./static/blog/index.yaml"
     indexContents <- liftEffect $ Pug.renderFile "./static/pages/index.pug"
       $ Json.encodeJson { posts: blogPostsIndex }
-    okHtml
+    HTTPure.ok
       $ renderHtmlWithTemplate
-      $ Obj.fromHomogeneous
+      $ Json.encodeJson
           { contents: indexContents }
 
 -- TODO: This implementation is fugly
@@ -164,8 +165,10 @@ renderBlogPost
 renderBlogPost slug = do
   blogPostMarkdown <- loadBlogPostHtmlForSlug slug
   renderHtmlWithTemplate <- asks _.renderHtmlWithTemplate
-  okHtml $ renderHtmlWithTemplate $ Obj.fromHomogeneous
-    { contents: blogPostMarkdown }
+  HTTPure.ok
+    $ renderHtmlWithTemplate
+    $ Json.encodeJson
+        { contents: blogPostMarkdown }
 
 loadBlogPostHtmlForSlug :: forall m. MonadAff m => String -> m String
 loadBlogPostHtmlForSlug slug = do
@@ -182,12 +185,7 @@ renderNotFound = do
     HTTPureStatus.notFound
     (HTTPure.header "Content-Type" "text/html; charset=utf-8")
     $ renderHtmlWithTemplate
-    $ Obj.fromHomogeneous { contents: "Not found" }
-
--- This can be made easier using the Body type class
-okHtml :: forall m. MonadAff m => String -> m HTTPure.Response
-okHtml html =
-  HTTPure.ok' (HTTPure.header "Content-Type" "text/html; charset=utf-8") html
+    $ Json.encodeJson { contents: "Not found" }
 
 main :: HTTPure.ServerM
 main = do
