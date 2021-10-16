@@ -22,7 +22,7 @@ import Data.String as S
 newtype RawBlogPost = RawBlogPost
   { title :: String
   , summary :: String
-  , name :: String
+  , slug :: String
   , timestamp :: String
   }
 
@@ -32,7 +32,7 @@ instance Json.DecodeJson RawBlogPost where
 newtype BlogPost = BlogPost
   { title :: String
   , summary :: String
-  , name :: String
+  , slug :: String
   , timestamp :: Date
   }
 
@@ -44,7 +44,7 @@ printBlogPostDecodeError (InvalidDate dateString) =
   "Invalid date: " <> dateString
 
 fromRawBlogPost :: RawBlogPost -> Either BlogPostDecodeError BlogPost
-fromRawBlogPost (RawBlogPost { title, summary, name, timestamp: timestampS }) =
+fromRawBlogPost (RawBlogPost { title, summary, slug, timestamp: timestampS }) =
   do
     timestamp <-
       case S.split (S.Pattern "-") timestampS of
@@ -59,7 +59,7 @@ fromRawBlogPost (RawBlogPost { title, summary, name, timestamp: timestampS }) =
       $ BlogPost
           { title
           , summary
-          , name
+          , slug
           , timestamp
           }
   where
@@ -76,10 +76,10 @@ timestampFormatter = List.fromFoldable
   ]
 
 instance Json.EncodeJson BlogPost where
-  encodeJson (BlogPost { title, summary, name, timestamp: timestampD }) =
+  encodeJson (BlogPost { title, summary, slug, timestamp: timestampD }) =
     let
       timestampDT = DateTime timestampD $ Time bottom bottom bottom bottom
       timestamp = Format.format timestampFormatter timestampDT
     in
       Json.encodeJson
-        { title, summary, name, timestamp }
+        { title, summary, slug, timestamp }

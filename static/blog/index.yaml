@@ -1,10 +1,10 @@
 - title: Second post
   summary: some summary about the second post, encouraging the user to read the post
   timestamp: 2021-10-15
-  name: second
+  slug: second
 
 - title: First post ever
   summary: This is the first post ever created on this site, you are going to want to read this!
   timestamp: 2021-10-10
-  name: first
+  slug: first
 

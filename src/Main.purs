@@ -34,6 +34,8 @@ import Node.Encoding (Encoding(..))
 import Node.FS.Aff as FS
 import Node.Path (FilePath)
 import Node.Path as Path
+import Slug (Slug)
+import Slug as Slug
 import Styles.Main as Styles
 
 type Env =
@@ -81,7 +83,7 @@ indexRouter request = do
   case request.path of
     [] -> renderIndex
     [ "css", "styles.css" ] -> liftAff renderStyles
-    [ "blog", slug ] -> renderBlogPost slug
+    [ "blog", unvalidatedSlug ] -> renderBlogPost unvalidatedSlug
     _ ->
       case List.fromFoldable request.path of
         "assets" : assetPath -> fileRouter "./static/assets" $ List.intercalate
@@ -160,19 +162,22 @@ readBlogPostsIndex indexFilePath = do
 
 renderBlogPost
   :: forall m. MonadAsk Env m => MonadAff m => String -> m HTTPure.Response
-renderBlogPost slug = do
-  blogPostMarkdown <- loadBlogPostHtmlForSlug slug
-  renderHtmlWithTemplate <- asks _.renderHtmlWithTemplate
-  HTTPure.ok
-    $ renderHtmlWithTemplate
-    $ Json.encodeJson
-        { contents: blogPostMarkdown }
+renderBlogPost unvalidatedSlug =
+  case Slug.fromString unvalidatedSlug of
+    Nothing -> respondWithError $ InvalidSlug unvalidatedSlug
+    Just slug ->
+      do
+        blogPostMarkdown <- loadBlogPostHtmlForSlug slug
+        renderHtmlWithTemplate <- asks _.renderHtmlWithTemplate
+        HTTPure.ok
+          $ renderHtmlWithTemplate
+          $ Json.encodeJson
+              { contents: blogPostMarkdown }
 
-loadBlogPostHtmlForSlug :: forall m. MonadAff m => String -> m String
+loadBlogPostHtmlForSlug :: forall m. MonadAff m => Slug -> m String
 loadBlogPostHtmlForSlug slug = do
-  -- TODO: Sanitize slug
   postMarkdown <- liftAff $ FS.readTextFile UTF8 $ "./static/blog/posts/"
-    <> slug
+    <> Slug.toString slug
     <> ".md"
   liftEffect $ MD.renderString postMarkdown
 
@@ -184,6 +189,38 @@ renderNotFound = do
     (HTTPure.header "Content-Type" "text/html; charset=utf-8")
     $ renderHtmlWithTemplate
     $ Json.encodeJson { contents: "Not found" }
+
+data ServerError
+  = InvalidSlug String
+
+type ErrorViewModel =
+  { status :: HTTPureStatus.Status
+  , statusMessage :: String
+  , message :: String
+  }
+
+statusToString :: HTTPureStatus.Status -> String
+statusToString 400 = "Bad request"
+statusToString _ = "Unknown status code"
+
+respondWithError
+  :: forall m. MonadAsk Env m => MonadAff m => ServerError -> m HTTPure.Response
+respondWithError serverError = do
+  renderHtmlWithTemplate <- asks _.renderHtmlWithTemplate
+  let
+    error = serverErrorToErrorViewModel serverError
+  errorHtml <- liftEffect $ Pug.renderFile "./static/pages/error.pug"
+    $ Json.encodeJson { error }
+  HTTPure.response error.status $ renderHtmlWithTemplate $ Json.encodeJson
+    { contents: errorHtml }
+
+serverErrorToErrorViewModel
+  :: ServerError -> ErrorViewModel
+serverErrorToErrorViewModel (InvalidSlug invalidSlug) =
+  { status: 400
+  , statusMessage: statusToString 400
+  , message: "Invalid post slug: " <> invalidSlug
+  }
 
 main :: HTTPure.ServerM
 main = do
