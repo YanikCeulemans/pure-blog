@@ -2,45 +2,9 @@ module Styles.Main where
 
 import Prelude
 
-import CSS
-  ( class Val
-  , CSS
-  , Color
-  , GenericFontFamily(..)
-  , Path(..)
-  , Refinement(..)
-  , Selector(..)
-  , Size
-  , alignItems
-  , backgroundColor
-  , bold
-  , byClass
-  , color
-  , column
-  , display
-  , element
-  , flex
-  , flexDirection
-  , fontFamily
-  , fontSize
-  , fontWeight
-  , fromInt
-  , fromString
-  , grid
-  , key
-  , margin
-  , marginBottom
-  , nil
-  , padding
-  , pseudo
-  , px
-  , rem
-  , star
-  , (&)
-  , (?)
-  , (|*)
-  )
+import CSS (class Val, CSS, Color, GenericFontFamily(..), Path(..), Refinement(..), Selector(..), Size, alignItems, backgroundColor, bold, byClass, color, column, display, element, flex, flexDirection, fontFamily, fontSize, fontStyle, fontWeight, fromInt, fromString, grid, key, lineHeight, margin, marginBottom, nil, padding, pseudo, px, rem, star, (&), (?), (|*))
 import CSS.Common (auto, center)
+import CSS.FontStyle (italic)
 import Data.NonEmpty as NE
 import Data.Tuple.Nested (tuple2)
 
@@ -73,6 +37,18 @@ typography = do
   element "p" ? do
     margin (rem 1.0) nil (rem 1.0) nil
 
+  element "strong" ? do
+    fontWeight bold
+
+  element "em" ? do
+    fontStyle italic
+
+  element "code" ? do
+    fontFamily
+      [ "Fira Code" ]
+      $ NE.NonEmpty (GenericFontFamily $ fromString "monospace") []
+    lineHeight $ rem 3.0
+
 main :: CSS
 main = do
   element "html" ? do
@@ -92,6 +68,9 @@ main = do
     gridTemplateRows $ tuple2 (rem 5.0) (auto :: Size _)
 
   typography
+
+  element "pre" ? do
+    margin (rem 2.0) nil (rem 2.0) nil
 
   Selector (Refinement [])
     (Combined (element "a") (element "a" & pseudo "hover")) ? do

@@ -11,6 +11,8 @@ import Partial.Unsafe (unsafeCrashWith)
 
 newtype Slug = Slug String
 
+derive newtype instance Eq Slug
+
 slugRegex :: Regex.Regex
 slugRegex =
   Regex.regex "^(?:[a-z-])*[a-z]+$" RegexFlags.noFlags

@@ -160,6 +160,17 @@ readBlogPostsIndex indexFilePath = do
     lmap BlogPost.printBlogPostDecodeError
       $ traverse BlogPost.fromRawBlogPost rawBlogPosts
 
+readBlogPost :: Slug -> Aff BlogPost
+readBlogPost slug = do
+  blogPostsIndex <- readBlogPostsIndex "./static/blog/index.yaml"
+  case Array.find (BlogPost.slug >>> (==) slug) blogPostsIndex of
+    Nothing -> throwError $ error
+      ( "No post could be found for slug: '"
+          <> Slug.toString slug
+          <> "'"
+      )
+    Just post -> pure post
+
 renderBlogPost
   :: forall m. MonadAsk Env m => MonadAff m => String -> m HTTPure.Response
 renderBlogPost unvalidatedSlug =
@@ -167,19 +178,26 @@ renderBlogPost unvalidatedSlug =
     Nothing -> respondWithError $ InvalidSlug unvalidatedSlug
     Just slug ->
       do
-        blogPostMarkdown <- loadBlogPostHtmlForSlug slug
+        blogPostHtml <- loadBlogPostHtmlForSlug slug
         renderHtmlWithTemplate <- asks _.renderHtmlWithTemplate
         HTTPure.ok
           $ renderHtmlWithTemplate
           $ Json.encodeJson
-              { contents: blogPostMarkdown }
+              { contents: blogPostHtml }
 
-loadBlogPostHtmlForSlug :: forall m. MonadAff m => Slug -> m String
+loadBlogPostHtmlForSlug :: forall m. MonadAff m => Slug -> m HtmlBody
 loadBlogPostHtmlForSlug slug = do
+  blogPost <- liftAff $ readBlogPost slug
   postMarkdown <- liftAff $ FS.readTextFile UTF8 $ "./static/blog/posts/"
     <> Slug.toString slug
     <> ".md"
-  liftEffect $ MD.renderString postMarkdown
+  renderedMd <- liftEffect $ MD.renderString postMarkdown
+  liftEffect
+    $ Pug.renderFile "./static/pages/blogpost.pug"
+    $ Json.encodeJson
+        { post: blogPost
+        , content: renderedMd
+        }
 
 renderNotFound :: forall m. MonadAsk Env m => MonadAff m => m HTTPure.Response
 renderNotFound = do

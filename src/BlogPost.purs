@@ -4,6 +4,7 @@ module BlogPost
   , BlogPostDecodeError
   , fromRawBlogPost
   , printBlogPostDecodeError
+  , slug
   ) where
 
 import Prelude
@@ -18,6 +19,8 @@ import Data.Int as Int
 import Data.List as List
 import Data.Maybe (Maybe)
 import Data.String as S
+import Slug (Slug)
+import Slug as Slug
 
 newtype RawBlogPost = RawBlogPost
   { title :: String
@@ -32,19 +35,26 @@ instance Json.DecodeJson RawBlogPost where
 newtype BlogPost = BlogPost
   { title :: String
   , summary :: String
-  , slug :: String
+  , slug :: Slug
   , timestamp :: Date
   }
 
+slug :: BlogPost -> Slug
+slug (BlogPost { slug: slugS }) = slugS
+
 data BlogPostDecodeError
   = InvalidDate String
+  | InvalidSlug String
 
 printBlogPostDecodeError :: BlogPostDecodeError -> String
 printBlogPostDecodeError (InvalidDate dateString) =
   "Invalid date: " <> dateString
+printBlogPostDecodeError (InvalidSlug slugString) =
+  "Invalid slug: " <> slugString
 
 fromRawBlogPost :: RawBlogPost -> Either BlogPostDecodeError BlogPost
-fromRawBlogPost (RawBlogPost { title, summary, slug, timestamp: timestampS }) =
+fromRawBlogPost
+  (RawBlogPost { title, summary, slug: slugS, timestamp: timestampS }) =
   do
     timestamp <-
       case S.split (S.Pattern "-") timestampS of
@@ -55,11 +65,12 @@ fromRawBlogPost (RawBlogPost { title, summary, slug, timestamp: timestampS }) =
             day <- stringToEnum dayS
             exactDate year month day
         _ -> Left $ InvalidDate timestampS
+    validatedSlug <- note (InvalidSlug slugS) $ Slug.fromString slugS
     pure
       $ BlogPost
           { title
           , summary
-          , slug
+          , slug: validatedSlug
           , timestamp
           }
   where
@@ -76,10 +87,11 @@ timestampFormatter = List.fromFoldable
   ]
 
 instance Json.EncodeJson BlogPost where
-  encodeJson (BlogPost { title, summary, slug, timestamp: timestampD }) =
+  encodeJson (BlogPost { title, summary, slug: slugT, timestamp: timestampD }) =
     let
       timestampDT = DateTime timestampD $ Time bottom bottom bottom bottom
       timestamp = Format.format timestampFormatter timestampDT
+      slugS = Slug.toString slugT
     in
       Json.encodeJson
-        { title, summary, slug, timestamp }
+        { title, summary, slug: slugS, timestamp }
