@@ -2,9 +2,13 @@ module Styles.Main where
 
 import Prelude
 
-import CSS (class Val, CSS, Color, GenericFontFamily(..), Path(..), Refinement(..), Selector(..), Size, alignItems, backgroundColor, bold, byClass, color, column, display, element, flex, flexDirection, fontFamily, fontSize, fontStyle, fontWeight, fromInt, fromString, grid, key, lineHeight, margin, marginBottom, nil, padding, pseudo, px, rem, star, (&), (?), (|*))
+import CSS (class Val, Abs, CSS, Color, Feature(..), GenericFontFamily(..), MediaQuery(..), Path(..), Refinement(..), Selector(..), Size, alignItems, backgroundColor, block, bold, border, byClass, color, column, display, element, flex, flexDirection, fontFamily, fontSize, fontStyle, fontWeight, fromInt, fromString, grid, key, lineHeight, margin, marginBottom, maxWidth, nil, padding, pct, pseudo, px, query, rem, solid, star, value, (&), (?), (|*))
 import CSS.Common (auto, center)
 import CSS.FontStyle (italic)
+import CSS.Media (screen)
+import CSS.Overflow (overflow, overflowAuto)
+import CSS.Overflow as OverFlow
+import Data.Maybe (Maybe(..))
 import Data.NonEmpty as NE
 import Data.Tuple.Nested (tuple2)
 
@@ -17,6 +21,16 @@ gap = key (fromString "gap")
 gridTemplateRows :: forall a. Val a => a -> CSS
 gridTemplateRows =
   key (fromString "grid-template-rows")
+
+mediaMinWidth :: Size Abs -> Feature
+mediaMinWidth = Feature "min-width" <<< Just <<< value
+
+mediaQueryLarge :: MediaQuery
+mediaQueryLarge =
+  MediaQuery Nothing screen $ NE.NonEmpty (mediaMinWidth $ px 930.0) []
+
+queryLarge :: CSS -> CSS
+queryLarge = query screen (NE.NonEmpty (mediaMinWidth $ px 930.0) [])
 
 typography :: CSS
 typography = do
@@ -71,6 +85,15 @@ main = do
 
   element "pre" ? do
     margin (rem 2.0) nil (rem 2.0) nil
+    padding (rem 2.0) (rem 2.0) (rem 2.0) (rem 2.0)
+    border solid (px 1.0) nearlyWhite
+    overflow overflowAuto
+
+  element "code" ? do
+    display block
+
+  element "img" ? do
+    maxWidth $ pct 100.0
 
   Selector (Refinement [])
     (Combined (element "a") (element "a" & pseudo "hover")) ? do
@@ -98,6 +121,13 @@ main = do
 
   star & byClass "main-content" ? do
     padding nil (rem 2.0) nil (rem 2.0)
+    overflow OverFlow.hidden
 
   star & byClass "post-date" ? do
     color $ fromInt 0xaaaaaa
+
+  queryLarge do
+    star & byClass "main-content" ? do
+      maxWidth $ px 900.0
+      margin nil auto nil auto
+
