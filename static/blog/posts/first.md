@@ -1,7 +1,7 @@
 This is the first ever blog post created on Unit 42. This is the place where the content for the post should appear
 
 This is a code block
-```
+```hs
 main :: Effect Unit
 main = log "Hello world!"
 

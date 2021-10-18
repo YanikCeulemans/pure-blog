@@ -86,9 +86,8 @@ indexRouter request = do
     [ "blog", unvalidatedSlug ] -> renderBlogPost unvalidatedSlug
     _ ->
       case List.fromFoldable request.path of
-        "assets" : assetPath -> fileRouter "./static/assets" $ List.intercalate
-          "/"
-          assetPath
+        "assets" : assetPath ->
+          fileRouter "./static/assets" $ List.intercalate "/" assetPath
         _ -> renderNotFound
 
 renderStyles :: HTTPure.ResponseM
@@ -97,7 +96,9 @@ renderStyles = do
     # CSS.renderedSheet
     # case _ of
         Just sheet ->
-          HTTPure.ok' (HTTPure.header "Content-Type" "text/css") sheet
+          HTTPure.ok'
+            (HTTPure.header "Content-Type" "text/css; charset=utf-8")
+            sheet
         Nothing ->
           HTTPure.internalServerError "Internal server error"
 
@@ -132,6 +133,7 @@ mimeTypeFromPath =
       _ -> Nothing
   where
   mimeTypeFromExtension "png" = Just "image/png"
+  mimeTypeFromExtension "css" = Just "text/css; charset=utf-8"
   mimeTypeFromExtension _ = Nothing
 
 renderResource

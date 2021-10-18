@@ -1,7 +1,18 @@
+var hljs = require("highlight.js")
 var MarkdownIt = require("markdown-it");
 
 exports.renderString_ = function(input) {
-  var md = new MarkdownIt();
+  var md = new MarkdownIt({
+    highlight: function (str, lang) {
+      if (lang && hljs.getLanguage(lang)) {
+        try {
+          return hljs.highlight(str, { language: lang, ignoreIllegals: true }).value;
+        } catch (__) {}
+      }
+
+      return "";
+    }
+  });
   return md.render(input);
 };
 
