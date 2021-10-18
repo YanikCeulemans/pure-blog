@@ -49,7 +49,8 @@ typography = do
     marginBottom $ rem 1.5
 
   element "p" ? do
-    margin (rem 1.0) nil (rem 1.0) nil
+    margin (rem 2.0) nil (rem 2.0) nil
+    lineHeight $ rem 2.8
 
   element "strong" ? do
     fontWeight bold
@@ -61,12 +62,13 @@ typography = do
     fontFamily
       [ "Fira Code" ]
       $ NE.NonEmpty (GenericFontFamily $ fromString "monospace") []
-    lineHeight $ rem 3.0
+    lineHeight $ rem 2.3
+    fontSize $ rem 1.6
 
 main :: CSS
 main = do
   element "html" ? do
-    fontSize $ px 10.0
+    fontSize $ px 12.0
 
   element "body" ? do
     fontSize $ rem 2.2
@@ -127,6 +129,9 @@ main = do
     color $ fromInt 0xaaaaaa
 
   queryLarge do
+    element "html" ? do
+      fontSize $ px 12.0
+
     star & byClass "main-content" ? do
       maxWidth $ px 900.0
       margin nil auto nil auto
