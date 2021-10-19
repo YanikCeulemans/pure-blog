@@ -95,7 +95,9 @@ main = do
     display block
 
   element "img" ? do
+    display block
     maxWidth $ pct 100.0
+    margin nil auto nil auto
 
   Selector (Refinement [])
     (Combined (element "a") (element "a" & pseudo "hover")) ? do

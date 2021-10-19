@@ -13,6 +13,8 @@ import Data.Argonaut as Json
 import Data.Array as Array
 import Data.Bifunctor (lmap)
 import Data.Either (Either(..), either)
+import Data.Foldable (intercalate)
+import Data.Function (applyFlipped)
 import Data.List ((:))
 import Data.List as List
 import Data.Maybe (Maybe(..), fromMaybe)
@@ -25,6 +27,8 @@ import Effect.Class (liftEffect)
 import Effect.Class.Console as Console
 import Effect.Exception (stack)
 import Foreign.MarkdownIt as MD
+import Foreign.Object (Object)
+import Foreign.Object as Object
 import Foreign.Pug (HtmlBody)
 import Foreign.Pug as Pug
 import Foreign.Yaml as Yaml
@@ -39,8 +43,17 @@ import Slug as Slug
 import Styles.Main as Styles
 
 type Env =
-  { renderHtmlWithTemplate :: Json -> HtmlBody
+  { renderHtmlWithTemplate :: Object Json -> HtmlBody
   }
+
+renderLayout :: forall m. MonadAsk Env m => HtmlBody -> m HtmlBody
+renderLayout =
+  Json.encodeJson
+    >>> { contents: _ }
+    >>> Object.fromHomogeneous
+    >>> render
+  where
+  render obj = asks _.renderHtmlWithTemplate <#> applyFlipped obj
 
 readerMiddleware
   :: (HTTPure.Request -> ReaderT Env Aff HTTPure.Response)
@@ -61,17 +74,15 @@ reportAndRenderErrorPage error = do
   let
     errorMsg = fromMaybe (message error) $ stack error
   Console.error $ "An uncaught error occurred: " <> errorMsg
-  renderHtmlWithTemplate <- asks _.renderHtmlWithTemplate
-  errorPage <- liftEffect $ Pug.renderFile "./static/pages/error.pug" $
-    Json.encodeJson
-      { error:
-          { status: 500
-          , message: "Internal server error"
-          }
-      }
-  HTTPure.internalServerError
-    $ renderHtmlWithTemplate
-    $ Json.encodeJson { contents: errorPage }
+  errorPage <- liftEffect
+    $ Pug.renderFile "./static/pages/error.pug"
+        { error:
+            { status: 500
+            , message: "Internal server error"
+            }
+        }
+  html <- renderLayout errorPage
+  HTTPure.internalServerError html
 
 indexRouter
   :: forall m
@@ -87,8 +98,8 @@ indexRouter request = do
     _ ->
       case List.fromFoldable request.path of
         "assets" : assetPath ->
-          fileRouter "./static/assets" $ List.intercalate "/" assetPath
-        _ -> renderNotFound
+          fileRouter "./static/assets" $ intercalate "/" assetPath
+        _ -> respondWithError $ NotFound $ intercalate "/" request.path
 
 renderStyles :: HTTPure.ResponseM
 renderStyles = do
@@ -114,7 +125,7 @@ fileRouter basePath filePath = do
     fullPath = Path.concat [ basePath, filePath ]
   fileBufferE <- liftAff $ try $ FS.readFile fullPath
   case fileBufferE of
-    Left _ -> renderNotFound
+    Left _ -> respondWithError $ NotFound filePath
     Right fileBuffer -> do
       let
         headers =
@@ -144,14 +155,11 @@ renderResource _ = HTTPure.internalServerError
 renderIndex :: forall m. MonadAsk Env m => MonadAff m => m HTTPure.Response
 renderIndex =
   do
-    renderHtmlWithTemplate <- asks _.renderHtmlWithTemplate
     blogPostsIndex <- liftAff $ readBlogPostsIndex "./static/blog/index.yaml"
-    indexContents <- liftEffect $ Pug.renderFile "./static/pages/index.pug"
-      $ Json.encodeJson { posts: blogPostsIndex }
-    HTTPure.ok
-      $ renderHtmlWithTemplate
-      $ Json.encodeJson
-          { contents: indexContents }
+    indexContents <- liftEffect
+      $ Pug.renderFile "./static/pages/index.pug" { posts: blogPostsIndex }
+    html <- renderLayout indexContents
+    HTTPure.ok html
 
 readBlogPostsIndex :: FilePath -> Aff (Array BlogPost)
 readBlogPostsIndex indexFilePath = do
@@ -179,13 +187,7 @@ renderBlogPost unvalidatedSlug =
   case Slug.fromString unvalidatedSlug of
     Nothing -> respondWithError $ InvalidSlug unvalidatedSlug
     Just slug ->
-      do
-        blogPostHtml <- loadBlogPostHtmlForSlug slug
-        renderHtmlWithTemplate <- asks _.renderHtmlWithTemplate
-        HTTPure.ok
-          $ renderHtmlWithTemplate
-          $ Json.encodeJson
-              { contents: blogPostHtml }
+      HTTPure.ok =<< renderLayout =<< loadBlogPostHtmlForSlug slug
 
 loadBlogPostHtmlForSlug :: forall m. MonadAff m => Slug -> m HtmlBody
 loadBlogPostHtmlForSlug slug = do
@@ -196,22 +198,13 @@ loadBlogPostHtmlForSlug slug = do
   renderedMd <- liftEffect $ MD.renderString postMarkdown
   liftEffect
     $ Pug.renderFile "./static/pages/blogpost.pug"
-    $ Json.encodeJson
         { post: blogPost
         , content: renderedMd
         }
 
-renderNotFound :: forall m. MonadAsk Env m => MonadAff m => m HTTPure.Response
-renderNotFound = do
-  renderHtmlWithTemplate <- asks _.renderHtmlWithTemplate
-  HTTPure.response'
-    HTTPureStatus.notFound
-    (HTTPure.header "Content-Type" "text/html; charset=utf-8")
-    $ renderHtmlWithTemplate
-    $ Json.encodeJson { contents: "Not found" }
-
 data ServerError
   = InvalidSlug String
+  | NotFound String
 
 type ErrorViewModel =
   { status :: HTTPureStatus.Status
@@ -221,18 +214,17 @@ type ErrorViewModel =
 
 statusToString :: HTTPureStatus.Status -> String
 statusToString 400 = "Bad request"
+statusToString 404 = "Not found"
 statusToString _ = "Unknown status code"
 
 respondWithError
   :: forall m. MonadAsk Env m => MonadAff m => ServerError -> m HTTPure.Response
 respondWithError serverError = do
-  renderHtmlWithTemplate <- asks _.renderHtmlWithTemplate
   let
     error = serverErrorToErrorViewModel serverError
-  errorHtml <- liftEffect $ Pug.renderFile "./static/pages/error.pug"
-    $ Json.encodeJson { error }
-  HTTPure.response error.status $ renderHtmlWithTemplate $ Json.encodeJson
-    { contents: errorHtml }
+  errorHtml <- liftEffect $ Pug.renderFile "./static/pages/error.pug" { error }
+  html <- renderLayout errorHtml
+  HTTPure.response error.status html
 
 serverErrorToErrorViewModel
   :: ServerError -> ErrorViewModel
@@ -240,6 +232,11 @@ serverErrorToErrorViewModel (InvalidSlug invalidSlug) =
   { status: 400
   , statusMessage: statusToString 400
   , message: "Invalid post slug: " <> invalidSlug
+  }
+serverErrorToErrorViewModel (NotFound notFoundPath) =
+  { status: 404
+  , statusMessage: statusToString 404
+  , message: "Not found: " <> notFoundPath
   }
 
 main :: HTTPure.ServerM
