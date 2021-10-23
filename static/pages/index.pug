@@ -1,10 +1,9 @@
 p A blog about mostly web related technologies
 
 section.posts-index
-  ol
-    each post in posts
-      li
-        h3
-          a(href="/blog/" + post.slug)= post.title
-        span.post-date= post.timestamp
-        p !{post.summary}
+  each post in posts
+    section.post-entry
+      h3
+        a(href="/blog/" + post.slug)= post.title
+      span.post-date= post.timestamp
+      p !{post.summary}

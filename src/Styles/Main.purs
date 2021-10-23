@@ -2,9 +2,10 @@ module Styles.Main where
 
 import Prelude
 
-import CSS (class Val, Abs, CSS, Color, Feature(..), GenericFontFamily(..), MediaQuery(..), Path(..), Refinement(..), Selector(..), Size, alignItems, backgroundColor, block, bold, border, byClass, color, column, display, element, flex, flexDirection, fontFamily, fontSize, fontStyle, fontWeight, fromInt, fromString, grid, key, lineHeight, margin, marginBottom, maxWidth, nil, padding, pct, pseudo, px, query, rem, solid, star, value, (&), (?), (|*))
+import CSS (class Val, Abs, CSS, Color, Feature(..), GenericFontFamily(..), MediaQuery(..), Path(..), Refinement(..), Selector(..), Size, alignItems, backgroundColor, block, bold, border, byClass, color, column, display, element, flex, flexDirection, fontFamily, fontSize, fontStyle, fontWeight, fromInt, fromString, grid, inlineBlock, key, lineHeight, margin, marginBottom, maxWidth, nil, padding, paddingLeft, pct, pseudo, px, query, rem, solid, star, value, (&), (?), (|*))
 import CSS.Common (auto, center)
 import CSS.FontStyle (italic)
+import CSS.ListStyle.Type (decimal, disc, listStyleType)
 import CSS.Media (screen)
 import CSS.Overflow (overflow, overflowAuto)
 import CSS.Overflow as OverFlow
@@ -36,6 +37,11 @@ typography :: CSS
 typography = do
   element "h1" ? do
     fontSize $ rem 5.2
+    fontWeight $ bold
+    marginBottom $ rem 2.0
+
+  element "h2" ? do
+    fontSize $ rem 4.6
     fontWeight $ bold
     marginBottom $ rem 2.0
 
@@ -87,12 +93,18 @@ main = do
 
   element "pre" ? do
     margin (rem 2.0) nil (rem 2.0) nil
-    padding (rem 2.0) (rem 2.0) (rem 2.0) (rem 2.0)
     border solid (px 1.0) nearlyWhite
     overflow overflowAuto
 
   element "code" ? do
-    display block
+    display inlineBlock
+
+  element "pre" |* element "code" ? do
+    margin (rem 2.0) (rem 2.0) (rem 2.0) (rem 2.0)
+
+  element "p" |* element "code" ? do
+    padding (rem 0.3) (rem 0.6) (rem 0.3) (rem 0.6)
+    backgroundColor $ fromInt 0x1f232d
 
   element "img" ? do
     display block
@@ -103,10 +115,16 @@ main = do
     (Combined (element "a") (element "a" & pseudo "hover")) ? do
     color nearlyWhite
 
+  element "ul" ? do
+    listStyleType disc
+    paddingLeft $ rem 4.0
+
   element "ol" ? do
-    display flex
-    flexDirection column
-    gap $ rem 1.0
+    listStyleType decimal
+    paddingLeft $ rem 4.0
+
+  element "li" ? do
+    margin (rem 1.0) nil (rem 1.0) nil
 
   element "header" ? do
     display flex
@@ -129,6 +147,13 @@ main = do
 
   star & byClass "post-date" ? do
     color $ fromInt 0xaaaaaa
+
+  star & byClass "posts-index" ? do
+    display flex
+    flexDirection column
+
+  star & byClass "post-entry" ? do
+    pure unit
 
   queryLarge do
     element "html" ? do

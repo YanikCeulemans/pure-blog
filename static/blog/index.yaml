@@ -1,3 +1,8 @@
+- title: "Contra\u00advariant and cmap"
+  summary: Exploring the what, why and how of the Contravariant type class and its cmap function
+  timestamp: 2021-10-19
+  slug: contravariant-and-cmap
+
 - title: Second post
   summary: some summary about the second post, encouraging the user to read the post
   timestamp: 2021-10-15
