@@ -80,4 +80,7 @@ ContraArrow sayHello
   # runContraArrow "John"
 -- outputs: "Hello, JOHN!"
 ```
-This example exposes the duality of Contravariant and Covariant Functors. Where one is a pre-processor and the other is a post-processor respectively.
+This example exposes the duality of Contravariant and Covariant Functors. Where one is a pre-processor and the other is a post-processor respectively. The implementation of `ContraArrow` given by the purescript [contravariant](https://pursuit.purescript.org/packages/purescript-contravariant) package is called `Op`. And the implementation for `cmap` is just flipped function composition i.e. the `<<<` operator.
+
+## Conclusion
+A Contravariant Functor is a Functor that allows us to do some pre-processing on data. It is an abstraction over modifying data before sending it to e.g. a function. However, this can be anything that takes in some data. In practice, as far as I'm aware, it isn't often used. It is far more common to see the manually implemented form of this abstraction. i.e. `g <<< f`
