@@ -5,6 +5,7 @@ import Prelude
 import BlogPost (BlogPost)
 import BlogPost as BlogPost
 import CSS as CSS
+import Capabilities (class MonadLog)
 import Control.Monad.Error.Class (catchError, throwError, try)
 import Control.Monad.Reader (class MonadAsk, ReaderT, runReaderT)
 import Control.Monad.Reader.Class (asks)
@@ -19,11 +20,12 @@ import Data.List ((:))
 import Data.List as List
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.String as String
+import Data.String.Utils as StringUtils
 import Data.Traversable (traverse)
 import Data.Tuple (Tuple(..))
 import Effect.Aff (Aff, Error, error, message)
 import Effect.Aff.Class (class MonadAff, liftAff)
-import Effect.Class (liftEffect)
+import Effect.Class (class MonadEffect, liftEffect)
 import Effect.Class.Console as Console
 import Effect.Exception (stack)
 import Foreign.MarkdownIt as MD
@@ -46,6 +48,24 @@ type Env =
   { renderHtmlWithTemplate :: Object Json -> HtmlBody
   }
 
+newtype AppM a = AppM (ReaderT Env Aff a)
+
+derive newtype instance Functor AppM
+derive newtype instance Apply AppM
+derive newtype instance Bind AppM
+derive newtype instance Applicative AppM
+derive newtype instance Monad AppM
+derive newtype instance MonadAsk Env AppM
+derive newtype instance MonadEffect AppM
+derive newtype instance MonadAff AppM
+
+instance MonadLog AppM where
+  log logLevel text maybeJson = do
+    Console.log text
+
+runAppM :: forall a. AppM a -> Env -> Aff a
+runAppM (AppM reader) = runReaderT reader
+
 renderLayout :: forall m. MonadAsk Env m => HtmlBody -> m HtmlBody
 renderLayout =
   Json.encodeJson
@@ -56,7 +76,7 @@ renderLayout =
   render obj = asks _.renderHtmlWithTemplate <#> applyFlipped obj
 
 readerMiddleware
-  :: (HTTPure.Request -> ReaderT Env Aff HTTPure.Response)
+  :: (HTTPure.Request -> AppM HTTPure.Response)
   -> HTTPure.Request
   -> HTTPure.ResponseM
 readerMiddleware router request = do
@@ -65,7 +85,7 @@ readerMiddleware router request = do
   let
     env = { renderHtmlWithTemplate }
   catchError
-    (runReaderT (router request) env)
+    (runAppM (router request) env)
     (\error -> runReaderT (reportAndRenderErrorPage error) env)
 
 reportAndRenderErrorPage
@@ -199,8 +219,17 @@ loadBlogPostHtmlForSlug slug = do
   liftEffect
     $ Pug.renderFile "./static/pages/blogpost.pug"
         { post: blogPost
+        , readTimeInMinutes: calculateAvgReadTime postMarkdown
         , content: renderedMd
         }
+
+calculateAvgReadTime :: String -> Int
+calculateAvgReadTime =
+  StringUtils.words
+    >>> Array.length
+    >>> divByAvgWordsPerMinute
+  where
+  divByAvgWordsPerMinute = flip div 250
 
 data ServerError
   = InvalidSlug String

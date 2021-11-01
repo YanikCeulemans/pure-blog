@@ -2,13 +2,14 @@ module Styles.Main where
 
 import Prelude
 
-import CSS (class Val, Abs, CSS, Color, Feature(..), GenericFontFamily(..), MediaQuery(..), Path(..), Refinement(..), Selector(..), Size, alignItems, backgroundColor, block, bold, border, byClass, color, column, display, element, flex, flexDirection, fontFamily, fontSize, fontStyle, fontWeight, fromInt, fromString, grid, inlineBlock, key, lineHeight, margin, marginBottom, maxWidth, nil, padding, paddingLeft, pct, pseudo, px, query, rem, solid, star, value, (&), (?), (|*))
-import CSS.Common (auto, center)
+import CSS (class Val, Abs, CSS, Color, Feature(..), GenericFontFamily(..), MediaQuery(..), Path(..), Refinement(..), Selector(..), Size, alignItems, backgroundColor, black, block, bold, border, byClass, color, column, display, element, flex, flexDirection, fontFamily, fontSize, fontStyle, fontWeight, fromInt, fromString, grid, hover, inlineBlock, key, letterSpacing, lighter, lineHeight, margin, marginBottom, maxWidth, nil, noneTextDecoration, padding, paddingLeft, pct, pseudo, px, query, rem, solid, star, textDecoration, textTransform, value, white, (&), (?), (|*))
+import CSS.Common (auto, center, inherit, none)
 import CSS.FontStyle (italic)
 import CSS.ListStyle.Type (decimal, disc, listStyleType)
 import CSS.Media (screen)
 import CSS.Overflow (overflow, overflowAuto)
 import CSS.Overflow as OverFlow
+import CSS.Text.Transform (uppercase)
 import Data.Maybe (Maybe(..))
 import Data.NonEmpty as NE
 import Data.Tuple.Nested (tuple2)
@@ -43,7 +44,7 @@ typography = do
   element "h2" ? do
     fontSize $ rem 4.6
     fontWeight $ bold
-    marginBottom $ rem 2.0
+    margin (rem 4.0) nil (rem 2.0) nil
 
   element "h3" ? do
     fontSize $ rem 4.2
@@ -56,7 +57,7 @@ typography = do
 
   element "p" ? do
     margin (rem 2.0) nil (rem 2.0) nil
-    lineHeight $ rem 2.8
+    lineHeight $ rem 3.0
 
   element "strong" ? do
     fontWeight bold
@@ -79,7 +80,7 @@ main = do
   element "body" ? do
     fontSize $ rem 2.2
     fontFamily
-      [ "Crimson Text" ]
+      [ "Lora" ]
       $ NE.NonEmpty
           (GenericFontFamily $ fromString "Times")
           [ GenericFontFamily $ fromString "Serif" ]
@@ -87,7 +88,7 @@ main = do
     color nearlyWhite
     display grid
     gap $ rem 2.0
-    gridTemplateRows $ tuple2 (rem 5.0) (auto :: Size _)
+    gridTemplateRows $ tuple2 (rem 6.0) (auto :: Size _)
 
   typography
 
@@ -127,11 +128,12 @@ main = do
     margin (rem 1.0) nil (rem 1.0) nil
 
   element "header" ? do
+    gap $ rem 1.6
     display flex
     alignItems center
-    padding nil (rem 2.0) nil (rem 2.0)
-    backgroundColor $ fromInt 0x61afef
-    fontWeight bold
+    padding nil (rem 5.0) nil (rem 5.0)
+    backgroundColor white
+    color black
     fontFamily
       [ "Helvetica" ]
       $ NE.NonEmpty
@@ -140,6 +142,20 @@ main = do
 
   element "header" |* element "a" ? do
     color $ fromInt 0x333333
+
+  star & byClass "logo" ? do
+    fontWeight bold
+    textTransform uppercase
+    letterSpacing $ px 3.0
+    fontSize $ rem 2.0
+    textDecoration noneTextDecoration
+
+  (star & byClass "logo") & hover ? do
+    color black
+
+  star & byClass "logo-subtitle" ? do
+    fontSize $ rem 1.8
+    fontWeight lighter
 
   star & byClass "main-content" ? do
     padding nil (rem 2.0) nil (rem 2.0)
