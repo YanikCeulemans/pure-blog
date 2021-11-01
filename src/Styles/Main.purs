@@ -42,17 +42,17 @@ typography = do
     marginBottom $ rem 2.0
 
   element "h2" ? do
-    fontSize $ rem 4.6
+    fontSize $ rem 3.6
     fontWeight $ bold
     margin (rem 4.0) nil (rem 2.0) nil
 
   element "h3" ? do
-    fontSize $ rem 4.2
+    fontSize $ rem 3.0
     fontWeight $ bold
     marginBottom $ rem 1.5
 
   element "h4" ? do
-    fontSize $ rem 3.2
+    fontSize $ rem 2.8
     marginBottom $ rem 1.5
 
   element "p" ? do

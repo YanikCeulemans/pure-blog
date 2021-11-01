@@ -5,7 +5,7 @@ import Prelude
 import BlogPost (BlogPost)
 import BlogPost as BlogPost
 import CSS as CSS
-import Capabilities (class MonadLog)
+import Capabilities.LogMessages (class LogMessages)
 import Control.Monad.Error.Class (catchError, throwError, try)
 import Control.Monad.Reader (class MonadAsk, ReaderT, runReaderT)
 import Control.Monad.Reader.Class (asks)
@@ -18,6 +18,7 @@ import Data.Foldable (intercalate)
 import Data.Function (applyFlipped)
 import Data.List ((:))
 import Data.List as List
+import Data.Log as Log
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.String as String
 import Data.String.Utils as StringUtils
@@ -59,9 +60,9 @@ derive newtype instance MonadAsk Env AppM
 derive newtype instance MonadEffect AppM
 derive newtype instance MonadAff AppM
 
-instance MonadLog AppM where
-  log logLevel text maybeJson = do
-    Console.log text
+instance LogMessages AppM where
+  logMessage log = do
+    Console.log $ Log.message log
 
 runAppM :: forall a. AppM a -> Env -> Aff a
 runAppM (AppM reader) = runReaderT reader

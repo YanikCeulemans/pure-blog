@@ -1,6 +1,6 @@
-In this very first post I would like to explore the `Contravariant` type class and its arguably confusing `cmap` function. I've actually used it when creating this website, which is when I started to really understand why one would use it.
+In this very first post I would like to explore the Contravariant type class and its arguably confusing `cmap` function. I've actually used it when creating this website, which is when I started to really understand why one would use it.
 
-Looking at the package [documentation](https://pursuit.purescript.org/packages/purescript-contravariant/5.0.0/docs/Data.Functor.Contravariant), the `Contravariant` type class may appear confusing.
+Looking at the package [documentation](https://pursuit.purescript.org/packages/purescript-contravariant/5.0.0/docs/Data.Functor.Contravariant), the Contravariant type class may appear confusing.
 ```hs
 class Contravariant f where
   cmap :: forall a b. (b -> a) -> f a -> f b
