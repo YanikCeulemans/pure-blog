@@ -5,7 +5,7 @@ import Prelude
 import BlogPost (BlogPost)
 import BlogPost as BlogPost
 import CSS as CSS
-import Capabilities.LogMessages (class LogMessages, logInfo)
+import Capabilities.LogMessages (class LogMessages, logError, logInfo)
 import Capabilities.Now (class Now, now)
 import Control.Monad.Error.Class (catchError, throwError, try)
 import Control.Monad.Reader (class MonadAsk, ReaderT, runReaderT)
@@ -89,11 +89,11 @@ renderLayout =
   where
   render obj = asks _.renderHtmlWithTemplate <#> applyFlipped obj
 
-readerMiddleware
+appMMiddleware
   :: (HTTPure.Request -> AppM HTTPure.Response)
   -> HTTPure.Request
   -> HTTPure.ResponseM
-readerMiddleware router request = do
+appMMiddleware router request = do
   renderHtmlWithTemplate <- liftEffect $ Pug.compileFile
     "./static/layout/main.pug"
   let
@@ -101,14 +101,24 @@ readerMiddleware router request = do
     appM = loggerMiddleware router $ request
   catchError
     (runAppM appM env)
-    (\error -> runReaderT (reportAndRenderErrorPage error) env)
+    (\error -> runAppM (reportAndRenderErrorPage error) env)
 
 reportAndRenderErrorPage
-  :: forall m. MonadAsk Env m => MonadAff m => Error -> m HTTPure.Response
+  :: forall m
+   . MonadAsk Env m
+  => MonadAff m
+  => LogMessages m
+  => Now m
+  => Error
+  -> m HTTPure.Response
 reportAndRenderErrorPage error = do
   let
-    errorMsg = fromMaybe (message error) $ stack error
-  Console.error $ "An uncaught error occurred: " <> errorMsg
+    errorMsg =
+      intercalate " "
+        [ "An uncaught error occurred:"
+        , fromMaybe (message error) $ stack error
+        ]
+  logError errorMsg
   errorPage <- liftEffect
     $ Pug.renderFile "./static/pages/error.pug"
         { error:
@@ -297,7 +307,11 @@ statusToString 404 = "Not found"
 statusToString _ = "Unknown status code"
 
 respondWithError
-  :: forall m. MonadAsk Env m => MonadAff m => ServerError -> m HTTPure.Response
+  :: forall m
+   . MonadAsk Env m
+  => MonadAff m
+  => ServerError
+  -> m HTTPure.Response
 respondWithError serverError = do
   let
     error = serverErrorToErrorViewModel serverError
@@ -320,5 +334,5 @@ serverErrorToErrorViewModel (NotFound notFoundPath) =
 
 main :: HTTPure.ServerM
 main = do
-  HTTPure.serve 8080 (readerMiddleware indexRouter) $ Console.log
+  HTTPure.serve 8080 (appMMiddleware indexRouter) $ Console.log
     "Server running on port 8080: http://localhost:8080"
