@@ -7,7 +7,7 @@ import BlogPost as BlogPost
 import CSS as CSS
 import Capabilities.LogMessages (class LogMessages, logError, logInfo)
 import Capabilities.Now (class Now, now)
-import Control.Monad.Error.Class (catchError, throwError, try)
+import Control.Monad.Error.Class (class MonadError, class MonadThrow, catchError, throwError, try)
 import Control.Monad.Reader (class MonadAsk, ReaderT, runReaderT)
 import Control.Monad.Reader.Class (asks)
 import Data.Argonaut (Json)
@@ -66,6 +66,8 @@ derive newtype instance Monad AppM
 derive newtype instance MonadAsk Env AppM
 derive newtype instance MonadEffect AppM
 derive newtype instance MonadAff AppM
+derive newtype instance MonadThrow Error AppM
+derive newtype instance MonadError Error AppM
 
 instance Now AppM where
   now = liftEffect Now.now
@@ -98,10 +100,8 @@ appMMiddleware router request = do
     "./static/layout/main.pug"
   let
     env = { renderHtmlWithTemplate }
-    appM = loggerMiddleware router $ request
-  catchError
-    (runAppM appM env)
-    (\error -> runAppM (reportAndRenderErrorPage error) env)
+    appM = router request
+  runAppM appM env
 
 reportAndRenderErrorPage
   :: forall m
@@ -128,6 +128,19 @@ reportAndRenderErrorPage error = do
         }
   html <- renderLayout errorPage
   HTTPure.internalServerError html
+
+catchErrorMiddleware
+  :: forall m
+   . MonadError Error m
+  => MonadAff m
+  => Now m
+  => LogMessages m
+  => MonadAsk Env m
+  => (HTTPure.Request -> m HTTPure.Response)
+  -> HTTPure.Request
+  -> m HTTPure.Response
+catchErrorMiddleware router request =
+  catchError (router request) reportAndRenderErrorPage
 
 loggerMiddleware
   :: forall m
@@ -334,5 +347,7 @@ serverErrorToErrorViewModel (NotFound notFoundPath) =
 
 main :: HTTPure.ServerM
 main = do
-  HTTPure.serve 8080 (appMMiddleware indexRouter) $ Console.log
-    "Server running on port 8080: http://localhost:8080"
+  HTTPure.serve 8080
+    (appMMiddleware $ loggerMiddleware $ catchErrorMiddleware $ indexRouter) $
+    Console.log
+      "Server running on port 8080: http://localhost:8080"
