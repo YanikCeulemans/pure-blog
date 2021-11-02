@@ -1,6 +1,11 @@
 module Capabilities.LogMessages
   ( class LogMessages
   , logMessage
+  , log
+  , logDebug
+  , logInfo
+  , logWarn
+  , logError
   ) where
 
 import Prelude

@@ -5,23 +5,29 @@ import Prelude
 import BlogPost (BlogPost)
 import BlogPost as BlogPost
 import CSS as CSS
-import Capabilities.LogMessages (class LogMessages)
+import Capabilities.LogMessages (class LogMessages, logInfo)
+import Capabilities.Now (class Now, now)
 import Control.Monad.Error.Class (catchError, throwError, try)
 import Control.Monad.Reader (class MonadAsk, ReaderT, runReaderT)
 import Control.Monad.Reader.Class (asks)
 import Data.Argonaut (Json)
 import Data.Argonaut as Json
+import Data.Array (fold)
 import Data.Array as Array
 import Data.Bifunctor (lmap)
+import Data.DateTime.Instant (unInstant)
 import Data.Either (Either(..), either)
 import Data.Foldable (intercalate)
 import Data.Function (applyFlipped)
+import Data.Int as Int
 import Data.List ((:))
 import Data.List as List
 import Data.Log as Log
 import Data.Maybe (Maybe(..), fromMaybe)
+import Data.Newtype (un)
 import Data.String as String
 import Data.String.Utils as StringUtils
+import Data.Time.Duration as DurationTime
 import Data.Traversable (traverse)
 import Data.Tuple (Tuple(..))
 import Effect.Aff (Aff, Error, error, message)
@@ -29,6 +35,7 @@ import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Class (class MonadEffect, liftEffect)
 import Effect.Class.Console as Console
 import Effect.Exception (stack)
+import Effect.Now as Now
 import Foreign.MarkdownIt as MD
 import Foreign.Object (Object)
 import Foreign.Object as Object
@@ -60,6 +67,12 @@ derive newtype instance MonadAsk Env AppM
 derive newtype instance MonadEffect AppM
 derive newtype instance MonadAff AppM
 
+instance Now AppM where
+  now = liftEffect Now.now
+  nowDate = liftEffect Now.nowDate
+  nowTime = liftEffect Now.nowTime
+  nowDateTime = liftEffect Now.nowDateTime
+
 instance LogMessages AppM where
   logMessage log = do
     Console.log $ Log.message log
@@ -85,8 +98,9 @@ readerMiddleware router request = do
     "./static/layout/main.pug"
   let
     env = { renderHtmlWithTemplate }
+    appM = loggerMiddleware router $ request
   catchError
-    (runAppM (router request) env)
+    (runAppM appM env)
     (\error -> runReaderT (reportAndRenderErrorPage error) env)
 
 reportAndRenderErrorPage
@@ -104,6 +118,37 @@ reportAndRenderErrorPage error = do
         }
   html <- renderLayout errorPage
   HTTPure.internalServerError html
+
+loggerMiddleware
+  :: forall m
+   . MonadAsk Env m
+  => Now m
+  => LogMessages m
+  => MonadAff m
+  => (HTTPure.Request -> m HTTPure.Response)
+  -> HTTPure.Request
+  -> m HTTPure.Response
+loggerMiddleware router request = do
+  let
+    nowInMsInNumber =
+      now <#> unInstant >>> un DurationTime.Milliseconds
+  before <- nowInMsInNumber
+  response <- router request
+  after <- nowInMsInNumber
+  let
+    requestPath = case request.path of
+      [] -> "/"
+      parts -> intercalate "/" parts
+
+    timeTaken = fold [ show $ Int.round $ after - before, "ms" ]
+  logInfo $ intercalate " "
+    [ show request.method # String.toUpper
+    , requestPath
+    , "-"
+    , show response.status
+    , timeTaken
+    ]
+  pure response
 
 indexRouter
   :: forall m
@@ -203,7 +248,11 @@ readBlogPost slug = do
     Just post -> pure post
 
 renderBlogPost
-  :: forall m. MonadAsk Env m => MonadAff m => String -> m HTTPure.Response
+  :: forall m
+   . MonadAsk Env m
+  => MonadAff m
+  => String
+  -> m HTTPure.Response
 renderBlogPost unvalidatedSlug =
   case Slug.fromString unvalidatedSlug of
     Nothing -> respondWithError $ InvalidSlug unvalidatedSlug

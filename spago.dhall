@@ -39,6 +39,7 @@ to generate this file without the comments in this block.
   , "node-fs-aff"
   , "node-path"
   , "nonempty"
+  , "now"
   , "options"
   , "partial"
   , "prelude"
