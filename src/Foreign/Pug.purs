@@ -1,4 +1,4 @@
-module Foreign.Pug (HtmlBody, compileFile, renderFile) where
+module Foreign.Pug (HtmlBody(..), compileFile, renderFile) where
 
 import Prelude
 
@@ -13,6 +13,7 @@ import HTTPure (header)
 import HTTPure.Body (class Body, defaultHeaders, write)
 import Node.Path (FilePath)
 
+-- TODO: This should not be in this module, create a seperate module
 newtype HtmlBody = HtmlBody String
 
 instance Body HtmlBody where

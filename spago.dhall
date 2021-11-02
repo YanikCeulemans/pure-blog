@@ -41,6 +41,7 @@ to generate this file without the comments in this block.
   , "nonempty"
   , "now"
   , "options"
+  , "ordered-collections"
   , "partial"
   , "prelude"
   , "psci-support"

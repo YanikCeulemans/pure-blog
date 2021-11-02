@@ -40,7 +40,7 @@ newtype BlogPost = BlogPost
   }
 
 slug :: BlogPost -> Slug
-slug (BlogPost { slug: slugS }) = slugS
+slug (BlogPost { slug: s }) = s
 
 data BlogPostDecodeError
   = InvalidDate String

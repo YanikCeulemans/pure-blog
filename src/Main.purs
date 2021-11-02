@@ -7,6 +7,9 @@ import BlogPost as BlogPost
 import CSS as CSS
 import Capabilities.LogMessages (class LogMessages, logError, logInfo)
 import Capabilities.Now (class Now, now)
+import Capabilities.ReadBlogPosts (class ReadBlogPosts, readBlogPost, readBlogPostContent, readBlogPostsIndex)
+import Capabilities.RenderMarkdown (class RenderMarkdown, renderMarkdown)
+import Capabilities.RenderPug (class RenderPug, renderPugFile)
 import Control.Monad.Error.Class (class MonadError, class MonadThrow, catchError, throwError, try)
 import Control.Monad.Reader (class MonadAsk, ReaderT, runReaderT)
 import Control.Monad.Reader.Class (asks)
@@ -23,6 +26,8 @@ import Data.Int as Int
 import Data.List ((:))
 import Data.List as List
 import Data.Log as Log
+import Data.Map (Map)
+import Data.Map as Map
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Newtype (un)
 import Data.String as String
@@ -39,7 +44,7 @@ import Effect.Now as Now
 import Foreign.MarkdownIt as MD
 import Foreign.Object (Object)
 import Foreign.Object as Object
-import Foreign.Pug (HtmlBody)
+import Foreign.Pug (HtmlBody(..))
 import Foreign.Pug as Pug
 import Foreign.Yaml as Yaml
 import HTTPure as HTTPure
@@ -78,6 +83,40 @@ instance Now AppM where
 instance LogMessages AppM where
   logMessage log = do
     Console.log $ Log.message log
+
+instance ReadBlogPosts AppM where
+  readBlogPostContent slug =
+    liftAff $ FS.readTextFile UTF8
+      $ fold [ "./static/blog/posts/", Slug.toString slug, ".md" ]
+
+  readBlogPostsIndex = liftAff do
+    indexJsonEither <- Yaml.parse <$> FS.readTextFile UTF8
+      "./static/blog/index.yaml"
+    either (throwError <<< error) pure do
+      indexJson <- indexJsonEither
+      rawBlogPosts <- lmap Json.printJsonDecodeError $ Json.decodeJson indexJson
+      traverse BlogPost.fromRawBlogPost rawBlogPosts
+        # lmap BlogPost.printBlogPostDecodeError
+        # map toBlogPostIndex
+    where
+    toBlogPostIndex :: Array BlogPost -> Map Slug BlogPost
+    toBlogPostIndex = map toSlugIndexedPost >>> Map.fromFoldable
+    toSlugIndexedPost post = Tuple (BlogPost.slug post) post
+
+  readBlogPost slug = do
+    postsIndex <- readBlogPostsIndex
+    case Map.lookup slug postsIndex of
+      Just post -> pure post
+      Nothing ->
+        -- TODO: We don't want to throw errors in Aff, this should probably run in EitherT
+        throwError $ error $ fold
+          [ "No post could be found for slug: ", show slug ]
+
+instance RenderMarkdown AppM where
+  renderMarkdown = liftEffect <<< map HtmlBody <<< MD.renderString
+
+instance RenderPug AppM where
+  renderPugFile filePath = liftEffect <<< Pug.renderFile filePath
 
 runAppM :: forall a. AppM a -> Env -> Aff a
 runAppM (AppM reader) = runReaderT reader
@@ -177,13 +216,21 @@ indexRouter
   :: forall m
    . MonadAsk Env m
   => MonadAff m
+  => ReadBlogPosts m
+  => RenderMarkdown m
+  => RenderPug m
   => HTTPure.Request
   -> m HTTPure.Response
 indexRouter request = do
   case request.path of
     [] -> renderIndex
     [ "css", "styles.css" ] -> liftAff renderStyles
-    [ "blog", unvalidatedSlug ] -> renderBlogPost unvalidatedSlug
+    [ "blog", unvalidatedSlug ] -> do
+      case Slug.fromString unvalidatedSlug of
+        Nothing -> respondWithError $ InvalidSlug unvalidatedSlug
+        Just slug -> do
+          renderedPost <- renderBlogPost slug
+          HTTPure.ok renderedPost
     _ ->
       case List.fromFoldable request.path of
         "assets" : assetPath ->
@@ -244,14 +291,14 @@ renderResource _ = HTTPure.internalServerError
 renderIndex :: forall m. MonadAsk Env m => MonadAff m => m HTTPure.Response
 renderIndex =
   do
-    blogPostsIndex <- liftAff $ readBlogPostsIndex "./static/blog/index.yaml"
+    blogPostsIndex <- liftAff $ readBlogPostsIndexAff "./static/blog/index.yaml"
     indexContents <- liftEffect
       $ Pug.renderFile "./static/pages/index.pug" { posts: blogPostsIndex }
     html <- renderLayout indexContents
     HTTPure.ok html
 
-readBlogPostsIndex :: FilePath -> Aff (Array BlogPost)
-readBlogPostsIndex indexFilePath = do
+readBlogPostsIndexAff :: FilePath -> Aff (Array BlogPost)
+readBlogPostsIndexAff indexFilePath = do
   indexJsonE <- Yaml.parse <$> FS.readTextFile UTF8 indexFilePath
   either (throwError <<< error) pure $ do
     indexJson <- indexJsonE
@@ -259,9 +306,9 @@ readBlogPostsIndex indexFilePath = do
     lmap BlogPost.printBlogPostDecodeError
       $ traverse BlogPost.fromRawBlogPost rawBlogPosts
 
-readBlogPost :: Slug -> Aff BlogPost
-readBlogPost slug = do
-  blogPostsIndex <- readBlogPostsIndex "./static/blog/index.yaml"
+readBlogPostAff :: Slug -> Aff BlogPost
+readBlogPostAff slug = do
+  blogPostsIndex <- readBlogPostsIndexAff "./static/blog/index.yaml"
   case Array.find (BlogPost.slug >>> (==) slug) blogPostsIndex of
     Nothing -> throwError $ error
       ( "No post could be found for slug: '"
@@ -273,28 +320,34 @@ readBlogPost slug = do
 renderBlogPost
   :: forall m
    . MonadAsk Env m
-  => MonadAff m
-  => String
-  -> m HTTPure.Response
-renderBlogPost unvalidatedSlug =
-  case Slug.fromString unvalidatedSlug of
-    Nothing -> respondWithError $ InvalidSlug unvalidatedSlug
-    Just slug ->
-      HTTPure.ok =<< renderLayout =<< loadBlogPostHtmlForSlug slug
+  => ReadBlogPosts m
+  => RenderMarkdown m
+  => RenderPug m
+  => Slug
+  -> m HtmlBody
+renderBlogPost = do
+  renderLayout <=< loadBlogPostHtmlForSlug
 
-loadBlogPostHtmlForSlug :: forall m. MonadAff m => Slug -> m HtmlBody
+loadBlogPostHtmlForSlug
+  :: forall m
+   . ReadBlogPosts m
+  => RenderMarkdown m
+  => RenderPug m
+  => Slug
+  -> m HtmlBody
 loadBlogPostHtmlForSlug slug = do
-  blogPost <- liftAff $ readBlogPost slug
-  postMarkdown <- liftAff $ FS.readTextFile UTF8 $ "./static/blog/posts/"
-    <> Slug.toString slug
-    <> ".md"
-  renderedMd <- liftEffect $ MD.renderString postMarkdown
-  liftEffect
-    $ Pug.renderFile "./static/pages/blogpost.pug"
-        { post: blogPost
-        , readTimeInMinutes: calculateAvgReadTime postMarkdown
-        , content: renderedMd
-        }
+  blogPost <- readBlogPost slug
+  {- postMarkdown <- liftAff $ FS.readTextFile UTF8 $ "./static/blog/posts/"
+  <> Slug.toString slug
+  <> ".md" -}
+  postMarkdown <- readBlogPostContent slug
+  -- renderedMd <- liftEffect $ MD.renderString postMarkdown
+  renderedMd <- renderMarkdown postMarkdown
+  renderPugFile "./static/pages/blogpost.pug"
+    { post: blogPost
+    , readTimeInMinutes: calculateAvgReadTime postMarkdown
+    , content: renderedMd
+    }
 
 calculateAvgReadTime :: String -> Int
 calculateAvgReadTime =

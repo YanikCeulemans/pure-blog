@@ -12,6 +12,8 @@ import Partial.Unsafe (unsafeCrashWith)
 newtype Slug = Slug String
 
 derive newtype instance Eq Slug
+derive newtype instance Show Slug
+derive newtype instance Ord Slug
 
 slugRegex :: Regex.Regex
 slugRegex =
