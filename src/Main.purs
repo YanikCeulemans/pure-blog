@@ -51,7 +51,6 @@ import HTTPure as HTTPure
 import HTTPure.Status as HTTPureStatus
 import Node.Encoding (Encoding(..))
 import Node.FS.Aff as FS
-import Node.Path (FilePath)
 import Node.Path as Path
 import Slug (Slug)
 import Slug as Slug
@@ -288,34 +287,19 @@ renderResource
 renderResource _ = HTTPure.internalServerError
   "Internal server error: Not yet implemented"
 
-renderIndex :: forall m. MonadAsk Env m => MonadAff m => m HTTPure.Response
-renderIndex =
-  do
-    blogPostsIndex <- liftAff $ readBlogPostsIndexAff "./static/blog/index.yaml"
-    indexContents <- liftEffect
-      $ Pug.renderFile "./static/pages/index.pug" { posts: blogPostsIndex }
-    html <- renderLayout indexContents
-    HTTPure.ok html
-
-readBlogPostsIndexAff :: FilePath -> Aff (Array BlogPost)
-readBlogPostsIndexAff indexFilePath = do
-  indexJsonE <- Yaml.parse <$> FS.readTextFile UTF8 indexFilePath
-  either (throwError <<< error) pure $ do
-    indexJson <- indexJsonE
-    rawBlogPosts <- lmap Json.printJsonDecodeError $ Json.decodeJson indexJson
-    lmap BlogPost.printBlogPostDecodeError
-      $ traverse BlogPost.fromRawBlogPost rawBlogPosts
-
-readBlogPostAff :: Slug -> Aff BlogPost
-readBlogPostAff slug = do
-  blogPostsIndex <- readBlogPostsIndexAff "./static/blog/index.yaml"
-  case Array.find (BlogPost.slug >>> (==) slug) blogPostsIndex of
-    Nothing -> throwError $ error
-      ( "No post could be found for slug: '"
-          <> Slug.toString slug
-          <> "'"
-      )
-    Just post -> pure post
+renderIndex
+  :: forall m
+   . MonadAsk Env m
+  => MonadAff m
+  => ReadBlogPosts m
+  => RenderPug m
+  => m HTTPure.Response
+renderIndex = do
+  blogPostsIndex <- readBlogPostsIndex
+  indexContents <- renderPugFile "./static/pages/index.pug"
+    { posts: Map.values blogPostsIndex }
+  html <- renderLayout indexContents
+  HTTPure.ok html
 
 renderBlogPost
   :: forall m
@@ -337,11 +321,7 @@ loadBlogPostHtmlForSlug
   -> m HtmlBody
 loadBlogPostHtmlForSlug slug = do
   blogPost <- readBlogPost slug
-  {- postMarkdown <- liftAff $ FS.readTextFile UTF8 $ "./static/blog/posts/"
-  <> Slug.toString slug
-  <> ".md" -}
   postMarkdown <- readBlogPostContent slug
-  -- renderedMd <- liftEffect $ MD.renderString postMarkdown
   renderedMd <- renderMarkdown postMarkdown
   renderPugFile "./static/pages/blogpost.pug"
     { post: blogPost
