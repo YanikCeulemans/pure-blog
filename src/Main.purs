@@ -3,6 +3,7 @@ module Main where
 import Prelude
 
 import AppM (AppM, Env, runAppM)
+import BlogPost (BlogPost)
 import CSS as CSS
 import Capabilities.LogMessages (class LogMessages, logError, logInfo)
 import Capabilities.Now (class Now, now)
@@ -149,12 +150,7 @@ indexRouter request = do
   case request.path of
     [] -> renderIndex
     [ "css", "styles.css" ] -> liftAff renderStyles
-    [ "blog", unvalidatedSlug ] -> do
-      case Slug.fromString unvalidatedSlug of
-        Nothing -> respondWithError $ InvalidSlug unvalidatedSlug
-        Just slug -> do
-          renderedPost <- renderBlogPost slug
-          HTTPure.ok renderedPost
+    [ "blog", unvalidatedSlug ] -> blogPostHandler unvalidatedSlug
     _ ->
       case List.fromFoldable request.path of
         "assets" : assetPath ->
@@ -226,26 +222,45 @@ renderIndex = do
   html <- renderLayout indexContents
   HTTPure.ok html
 
+blogPostHandler
+  :: forall m
+   . MonadAsk Env m
+  => MonadAff m
+  => ReadBlogPosts m
+  => RenderMarkdown m
+  => RenderPug m
+  => String
+  -> m HTTPure.Response
+blogPostHandler unvalidatedSlug =
+  case Slug.fromString unvalidatedSlug of
+    Nothing -> respondWithError $ InvalidSlug unvalidatedSlug
+    Just slug -> do
+      maybeBlogPost <- readBlogPost slug
+      case maybeBlogPost of
+        Nothing -> respondWithError $ NoBlogPostForSlug slug
+        Just blogPost -> HTTPure.ok =<< renderBlogPost blogPost slug
+
 renderBlogPost
   :: forall m
    . MonadAsk Env m
   => ReadBlogPosts m
   => RenderMarkdown m
   => RenderPug m
-  => Slug
+  => BlogPost
+  -> Slug
   -> m HtmlBody
-renderBlogPost = do
-  renderLayout <=< loadBlogPostHtmlForSlug
+renderBlogPost blogPost = do
+  renderLayout <=< loadBlogPostHtmlForSlug blogPost
 
 loadBlogPostHtmlForSlug
   :: forall m
    . ReadBlogPosts m
   => RenderMarkdown m
   => RenderPug m
-  => Slug
+  => BlogPost
+  -> Slug
   -> m HtmlBody
-loadBlogPostHtmlForSlug slug = do
-  blogPost <- readBlogPost slug
+loadBlogPostHtmlForSlug blogPost slug = do
   postMarkdown <- readBlogPostContent slug
   renderedMd <- renderMarkdown postMarkdown
   renderPugFile "./static/pages/blogpost.pug"
@@ -264,6 +279,7 @@ calculateAvgReadTime =
 
 data ServerError
   = InvalidSlug String
+  | NoBlogPostForSlug Slug
   | NotFound String
 
 type ErrorViewModel =
@@ -290,18 +306,23 @@ respondWithError serverError = do
   html <- renderLayout errorHtml
   HTTPure.response error.status html
 
-serverErrorToErrorViewModel
-  :: ServerError -> ErrorViewModel
-serverErrorToErrorViewModel (InvalidSlug invalidSlug) =
-  { status: 400
-  , statusMessage: statusToString 400
-  , message: "Invalid post slug: " <> invalidSlug
-  }
-serverErrorToErrorViewModel (NotFound notFoundPath) =
-  { status: 404
-  , statusMessage: statusToString 404
-  , message: "Not found: " <> notFoundPath
-  }
+serverErrorToErrorViewModel :: ServerError -> ErrorViewModel
+serverErrorToErrorViewModel = case _ of
+  InvalidSlug invalidSlug ->
+    { status: 400
+    , statusMessage: statusToString 400
+    , message: "Invalid post slug: " <> invalidSlug
+    }
+  NotFound notFoundPath ->
+    { status: 404
+    , statusMessage: statusToString 404
+    , message: "Not found: " <> notFoundPath
+    }
+  NoBlogPostForSlug slug ->
+    { status: 404
+    , statusMessage: statusToString 404
+    , message: "No blog post found for slug " <> show slug
+    }
 
 main :: HTTPure.ServerM
 main = do

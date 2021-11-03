@@ -19,7 +19,6 @@ import Data.Either (either)
 import Data.Log as Log
 import Data.Map (Map)
 import Data.Map as Map
-import Data.Maybe (Maybe(..))
 import Data.Traversable (traverse)
 import Data.Tuple (Tuple(..))
 import Effect.Aff (Aff, Error, error)
@@ -84,13 +83,7 @@ instance ReadBlogPosts AppM where
     toSlugIndexedPost post = Tuple (BlogPost.slug post) post
 
   readBlogPost slug = do
-    postsIndex <- readBlogPostsIndex
-    case Map.lookup slug postsIndex of
-      Just post -> pure post
-      Nothing ->
-        -- TODO: We don't want to throw errors in Aff, this should probably run in EitherT
-        throwError $ error $ fold
-          [ "No post could be found for slug: ", show slug ]
+    Map.lookup slug <$> readBlogPostsIndex
 
 instance RenderMarkdown AppM where
   renderMarkdown = liftEffect <<< map HtmlBody <<< MD.renderString

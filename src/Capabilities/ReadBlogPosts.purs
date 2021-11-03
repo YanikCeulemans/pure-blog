@@ -9,9 +9,10 @@ import Prelude
 
 import BlogPost (BlogPost)
 import Data.Map (Map)
+import Data.Maybe (Maybe)
 import Slug (Slug)
 
 class Monad m <= ReadBlogPosts m where
   readBlogPostContent :: Slug -> m String
   readBlogPostsIndex :: m (Map Slug BlogPost)
-  readBlogPost :: Slug -> m BlogPost
+  readBlogPost :: Slug -> m (Maybe BlogPost)
