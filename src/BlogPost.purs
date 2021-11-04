@@ -1,8 +1,12 @@
 module BlogPost
-  ( RawBlogPost
-  , BlogPost
+  ( RawBlogPostMetaData
+  , BlogPostMetaData
   , BlogPostDecodeError
-  , fromRawBlogPost
+  , BlogPost
+  , blogPost
+  , content
+  , metaData
+  , fromRawBlogPostMetaData
   , printBlogPostDecodeError
   , slug
   ) where
@@ -22,25 +26,39 @@ import Data.String as S
 import Slug (Slug)
 import Slug as Slug
 
-newtype RawBlogPost = RawBlogPost
+newtype BlogPost = BlogPost
+  { metaData :: BlogPostMetaData
+  , content :: String
+  }
+
+blogPost :: BlogPostMetaData -> String -> BlogPost
+blogPost m c = BlogPost { metaData: m, content: c }
+
+content :: BlogPost -> String
+content (BlogPost { content: c }) = c
+
+metaData :: BlogPost -> BlogPostMetaData
+metaData (BlogPost { metaData: m }) = m
+
+newtype RawBlogPostMetaData = RawBlogPostMetaData
   { title :: String
   , summary :: String
   , slug :: String
   , timestamp :: String
   }
 
-instance Json.DecodeJson RawBlogPost where
-  decodeJson = Json.decodeJson >>> map RawBlogPost
+instance Json.DecodeJson RawBlogPostMetaData where
+  decodeJson = Json.decodeJson >>> map RawBlogPostMetaData
 
-newtype BlogPost = BlogPost
+newtype BlogPostMetaData = BlogPostMetaData
   { title :: String
   , summary :: String
   , slug :: Slug
   , timestamp :: Date
   }
 
-slug :: BlogPost -> Slug
-slug (BlogPost { slug: s }) = s
+slug :: BlogPostMetaData -> Slug
+slug (BlogPostMetaData { slug: s }) = s
 
 data BlogPostDecodeError
   = InvalidDate String
@@ -52,9 +70,10 @@ printBlogPostDecodeError (InvalidDate dateString) =
 printBlogPostDecodeError (InvalidSlug slugString) =
   "Invalid slug: " <> slugString
 
-fromRawBlogPost :: RawBlogPost -> Either BlogPostDecodeError BlogPost
-fromRawBlogPost
-  (RawBlogPost { title, summary, slug: slugS, timestamp: timestampS }) =
+fromRawBlogPostMetaData
+  :: RawBlogPostMetaData -> Either BlogPostDecodeError BlogPostMetaData
+fromRawBlogPostMetaData
+  (RawBlogPostMetaData { title, summary, slug: slugS, timestamp: timestampS }) =
   do
     timestamp <-
       case S.split (S.Pattern "-") timestampS of
@@ -67,7 +86,7 @@ fromRawBlogPost
         _ -> Left $ InvalidDate timestampS
     validatedSlug <- note (InvalidSlug slugS) $ Slug.fromString slugS
     pure
-      $ BlogPost
+      $ BlogPostMetaData
           { title
           , summary
           , slug: validatedSlug
@@ -86,8 +105,9 @@ timestampFormatter = List.fromFoldable
   , Format.DayOfMonthTwoDigits
   ]
 
-instance Json.EncodeJson BlogPost where
-  encodeJson (BlogPost { title, summary, slug: slugT, timestamp: timestampD }) =
+instance Json.EncodeJson BlogPostMetaData where
+  encodeJson
+    (BlogPostMetaData { title, summary, slug: slugT, timestamp: timestampD }) =
     let
       timestampDT = DateTime timestampD $ Time bottom bottom bottom bottom
       timestamp = Format.format timestampFormatter timestampDT

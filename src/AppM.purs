@@ -2,15 +2,17 @@ module AppM (AppM, Env, runAppM) where
 
 import Prelude
 
-import BlogPost (BlogPost)
+import BlogPost (BlogPostMetaData, blogPost)
 import BlogPost as BlogPost
 import Capabilities.LogMessages (class LogMessages)
 import Capabilities.Now (class Now)
-import Capabilities.ReadBlogPosts (class ReadBlogPosts, readBlogPostsIndex)
+import Capabilities.ReadBlogPosts (class ReadBlogPosts, readBlogIndex)
 import Capabilities.RenderMarkdown (class RenderMarkdown)
 import Capabilities.RenderPug (class RenderPug)
 import Control.Monad.Error.Class (class MonadError, class MonadThrow, throwError)
+import Control.Monad.Maybe.Trans (MaybeT(..), runMaybeT)
 import Control.Monad.Reader (class MonadAsk, ReaderT, runReaderT)
+import Control.Monad.Trans.Class (lift)
 import Data.Argonaut (Json)
 import Data.Argonaut as Json
 import Data.Array (fold)
@@ -64,26 +66,25 @@ instance LogMessages AppM where
     Console.log $ Log.message log
 
 instance ReadBlogPosts AppM where
-  readBlogPostContent slug =
-    liftAff $ FS.readTextFile UTF8
-      $ fold [ "./static/blog/posts/", Slug.toString slug, ".md" ]
-
-  readBlogPostsIndex = liftAff do
+  readBlogIndex = liftAff do
     indexJsonEither <- Yaml.parse <$> FS.readTextFile UTF8
       "./static/blog/index.yaml"
     either (throwError <<< error) pure do
       indexJson <- indexJsonEither
       rawBlogPosts <- lmap Json.printJsonDecodeError $ Json.decodeJson indexJson
-      traverse BlogPost.fromRawBlogPost rawBlogPosts
+      traverse BlogPost.fromRawBlogPostMetaData rawBlogPosts
         # lmap BlogPost.printBlogPostDecodeError
-        # map toBlogPostIndex
+        # map toBlogIndex
     where
-    toBlogPostIndex :: Array BlogPost -> Map Slug BlogPost
-    toBlogPostIndex = map toSlugIndexedPost >>> Map.fromFoldable
+    toBlogIndex :: Array BlogPostMetaData -> Map Slug BlogPostMetaData
+    toBlogIndex = map toSlugIndexedPost >>> Map.fromFoldable
     toSlugIndexedPost post = Tuple (BlogPost.slug post) post
 
-  readBlogPost slug = do
-    Map.lookup slug <$> readBlogPostsIndex
+  readBlogPost slug = runMaybeT do
+    metaData <- MaybeT $ Map.lookup slug <$> readBlogIndex
+    content <- lift $ liftAff $ FS.readTextFile UTF8
+      $ fold [ "./static/blog/posts/", Slug.toString slug, ".md" ]
+    pure $ blogPost metaData content
 
 instance RenderMarkdown AppM where
   renderMarkdown = liftEffect <<< map HtmlBody <<< MD.renderString

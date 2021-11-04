@@ -4,10 +4,11 @@ import Prelude
 
 import AppM (AppM, Env, runAppM)
 import BlogPost (BlogPost)
+import BlogPost as BlogPost
 import CSS as CSS
 import Capabilities.LogMessages (class LogMessages, logError, logInfo)
 import Capabilities.Now (class Now, now)
-import Capabilities.ReadBlogPosts (class ReadBlogPosts, readBlogPost, readBlogPostContent, readBlogPostsIndex)
+import Capabilities.ReadBlogPosts (class ReadBlogPosts, readBlogPost, readBlogIndex)
 import Capabilities.RenderMarkdown (class RenderMarkdown, renderMarkdown)
 import Capabilities.RenderPug (class RenderPug, renderPugFile)
 import Control.Monad.Error.Class (class MonadError, catchError, try)
@@ -147,6 +148,7 @@ indexRouter
   => HTTPure.Request
   -> m HTTPure.Response
 indexRouter request = do
+  -- TODO: This should just route to handlers like the blogPostHandler
   case request.path of
     [] -> renderIndex
     [ "css", "styles.css" ] -> liftAff renderStyles
@@ -216,12 +218,12 @@ renderIndex
   => RenderPug m
   => m HTTPure.Response
 renderIndex = do
-  blogPostsIndex <- readBlogPostsIndex
-  indexContents <- renderPugFile "./static/pages/index.pug"
-    { posts: Map.values blogPostsIndex }
-  html <- renderLayout indexContents
-  HTTPure.ok html
+  blogIndex <- readBlogIndex
+  indexHtml <- renderPugFile "./static/pages/index.pug"
+    { posts: Map.values blogIndex }
+  HTTPure.ok =<< renderLayout indexHtml
 
+-- TODO: Remove the MonadAff constraint and return an either
 blogPostHandler
   :: forall m
    . MonadAsk Env m
@@ -238,7 +240,7 @@ blogPostHandler unvalidatedSlug =
       maybeBlogPost <- readBlogPost slug
       case maybeBlogPost of
         Nothing -> respondWithError $ NoBlogPostForSlug slug
-        Just blogPost -> HTTPure.ok =<< renderBlogPost blogPost slug
+        Just blogPost -> HTTPure.ok =<< renderBlogPost blogPost
 
 renderBlogPost
   :: forall m
@@ -247,10 +249,9 @@ renderBlogPost
   => RenderMarkdown m
   => RenderPug m
   => BlogPost
-  -> Slug
   -> m HtmlBody
-renderBlogPost blogPost = do
-  renderLayout <=< loadBlogPostHtmlForSlug blogPost
+renderBlogPost = do
+  renderLayout <=< loadBlogPostHtmlForSlug
 
 loadBlogPostHtmlForSlug
   :: forall m
@@ -258,13 +259,13 @@ loadBlogPostHtmlForSlug
   => RenderMarkdown m
   => RenderPug m
   => BlogPost
-  -> Slug
   -> m HtmlBody
-loadBlogPostHtmlForSlug blogPost slug = do
-  postMarkdown <- readBlogPostContent slug
+loadBlogPostHtmlForSlug blogPost = do
+  let
+    postMarkdown = BlogPost.content blogPost
   renderedMd <- renderMarkdown postMarkdown
   renderPugFile "./static/pages/blogpost.pug"
-    { post: blogPost
+    { post: BlogPost.metaData blogPost
     , readTimeInMinutes: calculateAvgReadTime postMarkdown
     , content: renderedMd
     }
