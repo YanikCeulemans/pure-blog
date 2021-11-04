@@ -23,6 +23,7 @@ import Data.Body (AssetBody, CssBody)
 import Data.Body as Body
 import Data.DateTime.Instant (unInstant)
 import Data.Either (Either(..), note)
+import Data.Environment (Environment(..), parseEnvironment)
 import Data.Foldable (intercalate)
 import Data.Function (applyFlipped)
 import Data.Int as Int
@@ -46,6 +47,7 @@ import HTTPure as HTTPure
 import HTTPure.Status as HTTPureStatus
 import Node.Path (FilePath)
 import Node.Path as Path
+import Node.Process as Process
 import Partial.Unsafe (unsafeCrashWith)
 import Slug (Slug)
 import Slug as Slug
@@ -59,18 +61,6 @@ renderLayout =
     >>> render
   where
   render obj = asks _.renderHtmlWithTemplate <#> applyFlipped obj
-
-appMMiddleware
-  :: (HTTPure.Request -> AppM HTTPure.Response)
-  -> HTTPure.Request
-  -> HTTPure.ResponseM
-appMMiddleware router request = do
-  renderHtmlWithTemplate <- liftEffect $ Pug.compileFile
-    "./static/layout/main.pug"
-  let
-    env = { renderHtmlWithTemplate }
-    appM = router request
-  runAppM appM env
 
 reportAndRenderErrorPage
   :: forall m
@@ -146,6 +136,8 @@ indexRouter
   :: forall m
    . MonadAsk Env m
   => MonadAff m
+  => LogMessages m
+  => Now m
   => ReadBlogPosts m
   => RenderMarkdown m
   => RenderPug m
@@ -334,9 +326,40 @@ serverErrorToErrorViewModel = case _ of
     , message: "No blog post found for slug " <> show slug
     }
 
+appMMiddleware
+  :: Environment
+  -> (HTTPure.Request -> AppM HTTPure.Response)
+  -> HTTPure.Request
+  -> HTTPure.ResponseM
+appMMiddleware environment router request = do
+  renderHtmlWithTemplate <- liftEffect $ Pug.compileFile
+    "./static/layout/main.pug"
+  let
+    env =
+      { renderHtmlWithTemplate, environment }
+    appM = router request
+  runAppM appM env
+
 main :: HTTPure.ServerM
 main = do
+  environment <- do
+    maybeEnvironmentString <- Process.lookupEnv "ENV"
+    case maybeEnvironmentString >>= parseEnvironment of
+      Nothing -> do
+        Console.warn "No \"ENV\" environment var set, defaulting to Production"
+        pure Production
+      Just env -> do
+        Console.info $ intercalate " "
+          [ "Environment set to:"
+          , show env
+          ]
+        pure env
   HTTPure.serve 8080
-    (appMMiddleware $ loggerMiddleware $ catchErrorMiddleware $ indexRouter) $
-    Console.log
-      "Server running on port 8080: http://localhost:8080"
+    ( appMMiddleware environment
+        $ loggerMiddleware
+        $ catchErrorMiddleware
+        $ indexRouter
+    )
+    do
+      Console.log
+        "Server running on port 8080: http://localhost:8080"

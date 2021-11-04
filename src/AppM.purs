@@ -12,7 +12,7 @@ import Capabilities.RenderMarkdown (class RenderMarkdown)
 import Capabilities.RenderPug (class RenderPug)
 import Control.Monad.Error.Class (class MonadError, class MonadThrow, throwError, try)
 import Control.Monad.Maybe.Trans (MaybeT(..), runMaybeT)
-import Control.Monad.Reader (class MonadAsk, ReaderT, runReaderT)
+import Control.Monad.Reader (class MonadAsk, ReaderT, asks, runReaderT)
 import Control.Monad.Trans.Class (lift)
 import Data.Argonaut (Json)
 import Data.Argonaut as Json
@@ -20,6 +20,8 @@ import Data.Array (fold)
 import Data.Bifunctor (lmap)
 import Data.Body (assetBody)
 import Data.Either (either, hush)
+import Data.Environment (Environment(..))
+import Data.Log (LogLevel(..))
 import Data.Log as Log
 import Data.Map (Map)
 import Data.Map as Map
@@ -42,6 +44,7 @@ import Slug as Slug
 
 type Env =
   { renderHtmlWithTemplate :: Object Json -> HtmlBody
+  , environment :: Environment
   }
 
 newtype AppM a = AppM (ReaderT Env Aff a)
@@ -65,7 +68,12 @@ instance Now AppM where
 
 instance LogMessages AppM where
   logMessage log = do
-    Console.log $ Log.message log
+    let
+      logLevel = Log.level log
+    environment <- asks _.environment
+    case environment, logLevel of
+      Production, Debug -> pure unit
+      _, _ -> Console.log $ Log.message log
 
 instance ReadBlogPosts AppM where
   readBlogIndex = liftAff do

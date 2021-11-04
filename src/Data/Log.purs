@@ -1,6 +1,7 @@
 module Data.Log
   ( LogLevel(..)
   , Log
+  , parseLogLevel
   , message
   , level
   , mkLog
@@ -65,4 +66,12 @@ mkLog lvl msg = do
       Info -> "INFO"
       Warn -> "WARN"
       Error -> "ERROR"
+
+parseLogLevel :: String -> Maybe LogLevel
+parseLogLevel = case _ of
+  "DEBUG" -> Just Debug
+  "INFO" -> Just Info
+  "WARN" -> Just Warn
+  "ERROR" -> Just Error
+  _ -> Nothing
 
