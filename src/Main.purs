@@ -17,6 +17,8 @@ import Control.Monad.Reader.Class (asks)
 import Data.Argonaut as Json
 import Data.Array (fold)
 import Data.Array as Array
+import Data.Body (CssBody)
+import Data.Body as Body
 import Data.DateTime.Instant (unInstant)
 import Data.Either (Either(..))
 import Data.Foldable (intercalate)
@@ -25,7 +27,7 @@ import Data.Int as Int
 import Data.List ((:))
 import Data.List as List
 import Data.Map as Map
-import Data.Maybe (Maybe(..), fromMaybe)
+import Data.Maybe (Maybe(..), fromMaybe, fromMaybe')
 import Data.Newtype (un)
 import Data.String as String
 import Data.String.Utils as StringUtils
@@ -43,6 +45,7 @@ import HTTPure as HTTPure
 import HTTPure.Status as HTTPureStatus
 import Node.FS.Aff as FS
 import Node.Path as Path
+import Partial.Unsafe (unsafeCrashWith)
 import Slug (Slug)
 import Slug as Slug
 import Styles.Main as Styles
@@ -151,7 +154,7 @@ indexRouter request = do
   -- TODO: This should just route to handlers like the blogPostHandler
   case request.path of
     [] -> renderIndex
-    [ "css", "styles.css" ] -> liftAff renderStyles
+    [ "css", cssName ] -> cssHandler cssName
     [ "blog", unvalidatedSlug ] -> blogPostHandler unvalidatedSlug
     _ ->
       case List.fromFoldable request.path of
@@ -159,17 +162,25 @@ indexRouter request = do
           fileRouter "./static/assets" $ intercalate "/" assetPath
         _ -> respondWithError $ NotFound $ intercalate "/" request.path
 
-renderStyles :: HTTPure.ResponseM
-renderStyles = do
-  CSS.render Styles.main
-    # CSS.renderedSheet
-    # case _ of
-        Just sheet ->
-          HTTPure.ok'
-            (HTTPure.header "Content-Type" "text/css; charset=utf-8")
-            sheet
-        Nothing ->
-          HTTPure.internalServerError "Internal server error"
+cssHandler
+  :: forall m. MonadAff m => MonadAsk Env m => String -> m HTTPure.Response
+cssHandler = renderStyles >>> handleStylesResult
+  where
+  handleStylesResult = case _ of
+    Right cssBody -> HTTPure.ok cssBody
+    Left (NotFound path) -> respondWithError (NotFound path)
+    Left se -> respondWithError se
+
+renderStyles :: String -> Either ServerError CssBody
+renderStyles = case _ of
+  "styles.css" ->
+    CSS.render Styles.main
+      # CSS.renderedSheet
+          >>> fromMaybe'
+            (\_ -> unsafeCrashWith "invalid CSS module Styles.main")
+          >>> Body.cssBodyFromString
+          >>> Right
+  path -> Left $ NotFound path
 
 fileRouter
   :: forall m
