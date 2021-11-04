@@ -8,19 +8,21 @@ import BlogPost as BlogPost
 import CSS as CSS
 import Capabilities.LogMessages (class LogMessages, logError, logInfo)
 import Capabilities.Now (class Now, now)
+import Capabilities.ReadAssets (class ReadAssets, readAsset)
 import Capabilities.ReadBlogPosts (class ReadBlogPosts, readBlogPost, readBlogIndex)
 import Capabilities.RenderMarkdown (class RenderMarkdown, renderMarkdown)
 import Capabilities.RenderPug (class RenderPug, renderPugFile)
-import Control.Monad.Error.Class (class MonadError, catchError, try)
+import Control.Monad.Error.Class (class MonadError, catchError)
+import Control.Monad.Except.Trans (ExceptT(..), runExceptT)
 import Control.Monad.Reader (class MonadAsk)
 import Control.Monad.Reader.Class (asks)
 import Data.Argonaut as Json
 import Data.Array (fold)
 import Data.Array as Array
-import Data.Body (CssBody)
+import Data.Body (AssetBody, CssBody)
 import Data.Body as Body
 import Data.DateTime.Instant (unInstant)
-import Data.Either (Either(..))
+import Data.Either (Either(..), note)
 import Data.Foldable (intercalate)
 import Data.Function (applyFlipped)
 import Data.Int as Int
@@ -32,9 +34,8 @@ import Data.Newtype (un)
 import Data.String as String
 import Data.String.Utils as StringUtils
 import Data.Time.Duration as DurationTime
-import Data.Tuple (Tuple(..))
 import Effect.Aff (Error, message)
-import Effect.Aff.Class (class MonadAff, liftAff)
+import Effect.Aff.Class (class MonadAff)
 import Effect.Class (liftEffect)
 import Effect.Class.Console as Console
 import Effect.Exception (stack)
@@ -43,7 +44,7 @@ import Foreign.Pug (HtmlBody)
 import Foreign.Pug as Pug
 import HTTPure as HTTPure
 import HTTPure.Status as HTTPureStatus
-import Node.FS.Aff as FS
+import Node.Path (FilePath)
 import Node.Path as Path
 import Partial.Unsafe (unsafeCrashWith)
 import Slug (Slug)
@@ -148,18 +149,17 @@ indexRouter
   => ReadBlogPosts m
   => RenderMarkdown m
   => RenderPug m
+  => ReadAssets m
   => HTTPure.Request
   -> m HTTPure.Response
 indexRouter request = do
-  -- TODO: This should just route to handlers like the blogPostHandler
   case request.path of
-    [] -> renderIndex
+    [] -> indexHandler
     [ "css", cssName ] -> cssHandler cssName
     [ "blog", unvalidatedSlug ] -> blogPostHandler unvalidatedSlug
     _ ->
       case List.fromFoldable request.path of
-        "assets" : assetPath ->
-          fileRouter "./static/assets" $ intercalate "/" assetPath
+        "assets" : assetPath -> fileHandler $ intercalate "/" assetPath
         _ -> respondWithError $ NotFound $ intercalate "/" request.path
 
 cssHandler
@@ -182,59 +182,57 @@ renderStyles = case _ of
           >>> Right
   path -> Left $ NotFound path
 
-fileRouter
+fileHandler
   :: forall m
    . MonadAff m
   => MonadAsk Env m
-  => String
-  -> String
+  => ReadAssets m
+  => FilePath
   -> m HTTPure.Response
-fileRouter basePath filePath = do
-  let
-    fullPath = Path.concat [ basePath, filePath ]
-  fileBufferE <- liftAff $ try $ FS.readFile fullPath
-  case fileBufferE of
-    Left _ -> respondWithError $ NotFound filePath
-    Right fileBuffer -> do
-      let
-        headers =
-          [ mimeTypeFromPath filePath <#> Tuple "Content-Type" ]
-            # Array.mapMaybe identity
-            # HTTPure.headers
-      HTTPure.ok' headers fileBuffer
-
-mimeTypeFromPath :: String -> Maybe String
-mimeTypeFromPath =
-  String.split (String.Pattern ".")
-    >>> Array.reverse
-    >>> List.fromFoldable
-    >>> case _ of
-      ext : _ -> mimeTypeFromExtension ext
-      _ -> Nothing
+fileHandler filePath =
+  handleFileResult =<< (runExceptT $ fileRouter filePath)
   where
-  mimeTypeFromExtension "png" = Just "image/png"
-  mimeTypeFromExtension "css" = Just "text/css; charset=utf-8"
-  mimeTypeFromExtension _ = Nothing
+  handleFileResult :: Either ServerError AssetBody -> m HTTPure.Response
+  handleFileResult = case _ of
+    Left se -> respondWithError se
+    Right assetBody' -> HTTPure.ok assetBody'
+
+fileRouter
+  :: forall m
+   . ReadAssets m
+  => FilePath
+  -> ExceptT ServerError m AssetBody
+fileRouter filePath = do
+  let
+    fullPath = Path.concat [ "./static/assets", filePath ]
+  ExceptT $ note (NotFound filePath) <$> readAsset fullPath
 
 renderResource
   :: forall m. MonadAsk Env m => MonadAff m => String -> m HTTPure.Response
 renderResource _ = HTTPure.internalServerError
   "Internal server error: Not yet implemented"
 
-renderIndex
+indexHandler
   :: forall m
-   . MonadAsk Env m
-  => MonadAff m
+   . MonadAff m
+  => MonadAsk Env m
   => ReadBlogPosts m
   => RenderPug m
   => m HTTPure.Response
+indexHandler = renderIndex >>= HTTPure.ok
+
+renderIndex
+  :: forall m
+   . MonadAsk Env m
+  => ReadBlogPosts m
+  => RenderPug m
+  => m HtmlBody
 renderIndex = do
   blogIndex <- readBlogIndex
   indexHtml <- renderPugFile "./static/pages/index.pug"
     { posts: Map.values blogIndex }
-  HTTPure.ok =<< renderLayout indexHtml
+  renderLayout indexHtml
 
--- TODO: Remove the MonadAff constraint and return an either
 blogPostHandler
   :: forall m
    . MonadAsk Env m

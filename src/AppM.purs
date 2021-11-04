@@ -6,10 +6,11 @@ import BlogPost (BlogPostMetaData, blogPost)
 import BlogPost as BlogPost
 import Capabilities.LogMessages (class LogMessages)
 import Capabilities.Now (class Now)
+import Capabilities.ReadAssets (class ReadAssets)
 import Capabilities.ReadBlogPosts (class ReadBlogPosts, readBlogIndex)
 import Capabilities.RenderMarkdown (class RenderMarkdown)
 import Capabilities.RenderPug (class RenderPug)
-import Control.Monad.Error.Class (class MonadError, class MonadThrow, throwError)
+import Control.Monad.Error.Class (class MonadError, class MonadThrow, throwError, try)
 import Control.Monad.Maybe.Trans (MaybeT(..), runMaybeT)
 import Control.Monad.Reader (class MonadAsk, ReaderT, runReaderT)
 import Control.Monad.Trans.Class (lift)
@@ -17,7 +18,8 @@ import Data.Argonaut (Json)
 import Data.Argonaut as Json
 import Data.Array (fold)
 import Data.Bifunctor (lmap)
-import Data.Either (either)
+import Data.Body (assetBody)
+import Data.Either (either, hush)
 import Data.Log as Log
 import Data.Map (Map)
 import Data.Map as Map
@@ -91,6 +93,11 @@ instance RenderMarkdown AppM where
 
 instance RenderPug AppM where
   renderPugFile filePath = liftEffect <<< Pug.renderFile filePath
+
+instance ReadAssets AppM where
+  readAsset filePath = do
+    bufferEither <- try $ liftAff $ FS.readFile filePath
+    pure $ assetBody filePath <$> hush bufferEither
 
 runAppM :: forall a. AppM a -> Env -> Aff a
 runAppM (AppM reader) = runReaderT reader
