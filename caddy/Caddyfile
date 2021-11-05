@@ -1,0 +1,13 @@
+{
+    auto_https off
+}
+
+http://localhost:8081 {
+    @assets path /assets/*
+    @not_assets not path /assets/*
+    encode gzip zstd
+    file_server @assets {
+        root /srv
+    }
+    reverse_proxy @not_assets host.docker.internal:8080
+}

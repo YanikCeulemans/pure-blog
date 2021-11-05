@@ -202,11 +202,6 @@ fileRouter filePath = do
     fullPath = Path.concat [ "./static/assets", filePath ]
   ExceptT $ note (NotFound filePath) <$> readAsset fullPath
 
-renderResource
-  :: forall m. MonadAsk Env m => MonadAff m => String -> m HTTPure.Response
-renderResource _ = HTTPure.internalServerError
-  "Internal server error: Not yet implemented"
-
 indexHandler
   :: forall m
    . MonadAff m
