@@ -2,8 +2,8 @@ module Styles.Main where
 
 import Prelude
 
-import CSS (class Val, Abs, CSS, Color, Feature(..), GenericFontFamily(..), MediaQuery(..), Path(..), Refinement(..), Selector(..), Size, alignItems, backgroundColor, black, block, bold, border, byClass, color, column, display, element, flex, flexDirection, fontFamily, fontSize, fontStyle, fontWeight, fromInt, fromString, grid, hover, inlineBlock, key, letterSpacing, lighter, lineHeight, margin, marginBottom, maxWidth, nil, noneTextDecoration, padding, paddingLeft, pct, pseudo, px, query, rem, solid, star, textDecoration, textTransform, value, white, (&), (?), (|*))
-import CSS.Common (auto, center, inherit, none)
+import CSS (class Val, Abs, CSS, Color, Feature(..), GenericFontFamily(..), Path(..), Refinement(..), Selector(..), Size, alignItems, backgroundColor, black, block, bold, border, byClass, color, column, display, element, flex, flexDirection, fontFamily, fontSize, fontStyle, fontWeight, fromInt, fromString, grid, hover, inlineBlock, key, letterSpacing, lighter, lineHeight, margin, marginBottom, maxWidth, nil, noneTextDecoration, padding, paddingLeft, pct, pseudo, px, query, rem, solid, star, textDecoration, textTransform, textWhitespace, value, white, whitespacePreWrap, (&), (?), (|*))
+import CSS.Common (auto, center)
 import CSS.FontStyle (italic)
 import CSS.ListStyle.Type (decimal, disc, listStyleType)
 import CSS.Media (screen)
@@ -27,12 +27,8 @@ gridTemplateRows =
 mediaMinWidth :: Size Abs -> Feature
 mediaMinWidth = Feature "min-width" <<< Just <<< value
 
-mediaQueryLarge :: MediaQuery
-mediaQueryLarge =
-  MediaQuery Nothing screen $ NE.NonEmpty (mediaMinWidth $ px 930.0) []
-
 queryLarge :: CSS -> CSS
-queryLarge = query screen (NE.NonEmpty (mediaMinWidth $ px 930.0) [])
+queryLarge = query screen $ NE.NonEmpty (mediaMinWidth $ px 930.0) []
 
 typography :: CSS
 typography = do
@@ -96,6 +92,9 @@ main = do
     margin (rem 2.0) nil (rem 2.0) nil
     border solid (px 1.0) nearlyWhite
     overflow overflowAuto
+
+  element "pre" & byClass "wrap" ? do
+    textWhitespace whitespacePreWrap
 
   element "code" ? do
     display inlineBlock

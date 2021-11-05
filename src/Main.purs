@@ -25,7 +25,7 @@ import Data.DateTime.Instant (unInstant)
 import Data.Either (Either(..), note)
 import Data.Environment (Environment(..), parseEnvironment)
 import Data.Foldable (intercalate)
-import Data.Function (applyFlipped)
+import Data.Function (applyFlipped, on)
 import Data.Int as Int
 import Data.List ((:))
 import Data.List as List
@@ -78,11 +78,15 @@ reportAndRenderErrorPage error = do
         , fromMaybe (message error) $ stack error
         ]
   logError errorMsg
+  debugMessage <- asks _.environment <#> case _ of
+    Development -> Just errorMsg
+    _ -> Nothing
   errorPage <- liftEffect
     $ Pug.renderFile "./static/pages/error.pug"
         { error:
             { status: 500
-            , message: "Internal server error"
+            , statusMessage: "Internal server error"
+            , debugMessage
             }
         }
   html <- renderLayout errorPage
@@ -222,7 +226,10 @@ renderIndex
 renderIndex = do
   blogIndex <- readBlogIndex
   indexHtml <- renderPugFile "./static/pages/index.pug"
-    { posts: Map.values blogIndex }
+    { posts:
+        Map.values blogIndex
+          # List.sortBy (flip compare `on` BlogPost.timestamp)
+    }
   renderLayout indexHtml
 
 blogPostHandler

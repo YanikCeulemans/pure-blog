@@ -13,7 +13,6 @@ import Capabilities.RenderPug (class RenderPug)
 import Control.Monad.Error.Class (class MonadError, class MonadThrow, throwError, try)
 import Control.Monad.Maybe.Trans (MaybeT(..), runMaybeT)
 import Control.Monad.Reader (class MonadAsk, ReaderT, asks, runReaderT)
-import Control.Monad.Trans.Class (lift)
 import Data.Argonaut (Json)
 import Data.Argonaut as Json
 import Data.Array (fold)
@@ -91,9 +90,11 @@ instance ReadBlogPosts AppM where
     toSlugIndexedPost post = Tuple (BlogPost.slug post) post
 
   readBlogPost slug = runMaybeT do
+    let
+      blogPostFilePath =
+        fold [ "./static/blog/posts/", Slug.toString slug, ".md" ]
     metaData <- MaybeT $ Map.lookup slug <$> readBlogIndex
-    content <- lift $ liftAff $ FS.readTextFile UTF8
-      $ fold [ "./static/blog/posts/", Slug.toString slug, ".md" ]
+    content <- liftAff $ FS.readTextFile UTF8 blogPostFilePath
     pure $ blogPost metaData content
 
 instance RenderMarkdown AppM where

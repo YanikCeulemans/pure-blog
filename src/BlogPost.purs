@@ -6,6 +6,7 @@ module BlogPost
   , blogPost
   , content
   , metaData
+  , timestamp
   , fromRawBlogPostMetaData
   , printBlogPostDecodeError
   , slug
@@ -60,6 +61,9 @@ newtype BlogPostMetaData = BlogPostMetaData
 slug :: BlogPostMetaData -> Slug
 slug (BlogPostMetaData { slug: s }) = s
 
+timestamp :: BlogPostMetaData -> Date
+timestamp (BlogPostMetaData { timestamp: t }) = t
+
 data BlogPostDecodeError
   = InvalidDate String
   | InvalidSlug String
@@ -75,7 +79,7 @@ fromRawBlogPostMetaData
 fromRawBlogPostMetaData
   (RawBlogPostMetaData { title, summary, slug: slugS, timestamp: timestampS }) =
   do
-    timestamp <-
+    timestamp' <-
       case S.split (S.Pattern "-") timestampS of
         [ yearS, monthS, dayS ] ->
           note (InvalidDate timestampS) do
@@ -90,7 +94,7 @@ fromRawBlogPostMetaData
           { title
           , summary
           , slug: validatedSlug
-          , timestamp
+          , timestamp: timestamp'
           }
   where
   stringToEnum :: forall a. BoundedEnum a => String -> Maybe a
@@ -110,8 +114,8 @@ instance Json.EncodeJson BlogPostMetaData where
     (BlogPostMetaData { title, summary, slug: slugT, timestamp: timestampD }) =
     let
       timestampDT = DateTime timestampD $ Time bottom bottom bottom bottom
-      timestamp = Format.format timestampFormatter timestampDT
+      timestamp' = Format.format timestampFormatter timestampDT
       slugS = Slug.toString slugT
     in
       Json.encodeJson
-        { title, summary, slug: slugS, timestamp }
+        { title, summary, slug: slugS, timestamp: timestamp' }

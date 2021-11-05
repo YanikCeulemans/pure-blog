@@ -1,3 +1,6 @@
 h3= error.status
 h4= error.statusMessage
 h4= error.message
+if error.debugMessage
+  pre.wrap
+    code= error.debugMessage
