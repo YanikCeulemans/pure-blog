@@ -2,7 +2,67 @@ module Styles.Main where
 
 import Prelude
 
-import CSS (class Val, Abs, CSS, Color, Feature(..), GenericFontFamily(..), Path(..), Refinement(..), Selector(..), Size, alignItems, backgroundColor, black, block, bold, border, byClass, color, column, display, element, flex, flexDirection, fontFamily, fontSize, fontStyle, fontWeight, fromInt, fromString, grid, hover, inlineBlock, key, letterSpacing, lighter, lineHeight, margin, marginBottom, maxWidth, nil, noneTextDecoration, padding, paddingLeft, pct, pseudo, px, query, rem, solid, star, textDecoration, textTransform, textWhitespace, value, white, whitespacePreWrap, (&), (?), (|*))
+import CSS
+  ( class Val
+  , Abs
+  , CSS
+  , Color
+  , Feature(..)
+  , GenericFontFamily(..)
+  , Path(..)
+  , Refinement(..)
+  , Selector(..)
+  , Size
+  , alignItems
+  , backgroundColor
+  , black
+  , block
+  , bold
+  , border
+  , byClass
+  , color
+  , column
+  , display
+  , element
+  , flex
+  , flexDirection
+  , fontFamily
+  , fontSize
+  , fontStyle
+  , fontWeight
+  , fromInt
+  , fromString
+  , grid
+  , hover
+  , inlineBlock
+  , key
+  , letterSpacing
+  , lighter
+  , lineHeight
+  , margin
+  , marginBottom
+  , maxWidth
+  , nil
+  , noneTextDecoration
+  , padding
+  , paddingLeft
+  , pct
+  , pseudo
+  , px
+  , query
+  , rem
+  , solid
+  , star
+  , textDecoration
+  , textTransform
+  , textWhitespace
+  , value
+  , white
+  , whitespacePreWrap
+  , (&)
+  , (?)
+  , (|*)
+  )
 import CSS.Common (auto, center)
 import CSS.FontStyle (italic)
 import CSS.ListStyle.Type (decimal, disc, listStyleType)
