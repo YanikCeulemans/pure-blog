@@ -46,7 +46,7 @@ mkLog lvl msg = do
 
   let
     formattedTimestamp = fold [ "[", formatTimestamp timestamp, "]" ]
-    formattedLevel = fold [ "[" <> formatLevel lvl <> "]" ]
+    formattedLevel = fold [ "[", formatLevel lvl, "]" ]
     formattedMessage = intercalate " "
       [ formattedTimestamp, formattedLevel, msg ]
   pure
@@ -60,12 +60,11 @@ mkLog lvl msg = do
   formatTimestamp =
     formatDateTime "YYYY-MM-DD hh:mm:ss.SSS"
       >>> fromRight "Invalid date format string"
-  formatLevel =
-    case _ of
-      Debug -> "DEBUG"
-      Info -> "INFO"
-      Warn -> "WARN"
-      Error -> "ERROR"
+  formatLevel = case _ of
+    Debug -> "DEBUG"
+    Info -> "INFO"
+    Warn -> "WARN"
+    Error -> "ERROR"
 
 parseLogLevel :: String -> Maybe LogLevel
 parseLogLevel = case _ of

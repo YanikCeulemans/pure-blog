@@ -19,7 +19,7 @@ import Control.Monad.Reader.Class (asks)
 import Data.Argonaut as Json
 import Data.Array (fold)
 import Data.Array as Array
-import Data.Body (AssetBody, CssBody)
+import Data.Body (AssetBody, CssBody, HtmlBody)
 import Data.Body as Body
 import Data.DateTime.Instant (unInstant)
 import Data.Either (Either(..), note)
@@ -41,7 +41,6 @@ import Effect.Class (liftEffect)
 import Effect.Class.Console as Console
 import Effect.Exception (stack)
 import Foreign.Object as Object
-import Foreign.Pug (HtmlBody)
 import Foreign.Pug as Pug
 import HTTPure as HTTPure
 import HTTPure.Status as HTTPureStatus
@@ -174,7 +173,7 @@ renderStyles = case _ of
       # CSS.renderedSheet
           >>> fromMaybe'
             (\_ -> unsafeCrashWith "invalid CSS module Styles.main")
-          >>> Body.cssBodyFromString
+          >>> Body.cssBody
           >>> Right
   path -> Left $ NotFound path
 

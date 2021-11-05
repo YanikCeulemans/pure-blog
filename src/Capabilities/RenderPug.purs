@@ -3,7 +3,7 @@ module Capabilities.RenderPug where
 import Prelude
 
 import Data.Argonaut (class EncodeJson)
-import Foreign.Pug (HtmlBody)
+import Data.Body (HtmlBody)
 import Node.Path (FilePath)
 
 class Monad m <= RenderPug m where

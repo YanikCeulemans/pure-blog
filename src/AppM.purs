@@ -17,7 +17,7 @@ import Data.Argonaut (Json)
 import Data.Argonaut as Json
 import Data.Array (fold)
 import Data.Bifunctor (lmap)
-import Data.Body (assetBody)
+import Data.Body (HtmlBody, assetBody, htmlBody)
 import Data.Either (either, hush)
 import Data.Environment (Environment(..))
 import Data.Log (LogLevel(..))
@@ -33,7 +33,6 @@ import Effect.Class.Console as Console
 import Effect.Now as Now
 import Foreign.MarkdownIt as MD
 import Foreign.Object (Object)
-import Foreign.Pug (HtmlBody(..))
 import Foreign.Pug as Pug
 import Foreign.Yaml as Yaml
 import Node.Encoding (Encoding(..))
@@ -98,7 +97,7 @@ instance ReadBlogPosts AppM where
     pure $ blogPost metaData content
 
 instance RenderMarkdown AppM where
-  renderMarkdown = liftEffect <<< map HtmlBody <<< MD.renderString
+  renderMarkdown = liftEffect <<< map htmlBody <<< MD.renderString
 
 instance RenderPug AppM where
   renderPugFile filePath = liftEffect <<< Pug.renderFile filePath

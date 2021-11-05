@@ -1,13 +1,16 @@
 module Data.Body
   ( AssetBody
   , CssBody
+  , HtmlBody
   , MimeType(..)
   , assetBody
-  , cssBodyFromString
+  , cssBody
+  , htmlBody
   ) where
 
 import Prelude
 
+import Data.Argonaut as Json
 import Data.Array (mapMaybe)
 import Data.Array as Array
 import Data.List ((:))
@@ -21,6 +24,21 @@ import HTTPure.Headers as HTTPureHeaders
 import Node.Buffer (Buffer)
 import Node.Path (FilePath)
 
+newtype HtmlBody = HtmlBody String
+
+instance Body HtmlBody where
+  defaultHeaders (HtmlBody htmlString) =
+    append htmlHeader <$> HTTPureBody.defaultHeaders htmlString
+    where
+    htmlHeader = HTTPureHeaders.header "Content-Type" "text/html; charset=utf-8"
+  write (HtmlBody htmlString) r = HTTPureBody.write htmlString r
+
+instance Json.EncodeJson HtmlBody where
+  encodeJson (HtmlBody htmlString) = Json.encodeJson htmlString
+
+htmlBody :: String -> HtmlBody
+htmlBody = HtmlBody
+
 newtype CssBody = CssBody String
 
 instance Body CssBody where
@@ -31,8 +49,8 @@ instance Body CssBody where
     where
     cssHeader = HTTPureHeaders.header "Content-Type" "text/css; charset=utf-8"
 
-cssBodyFromString :: String -> CssBody
-cssBodyFromString = CssBody
+cssBody :: String -> CssBody
+cssBody = CssBody
 
 data MimeType
   = TextCss

@@ -1,4 +1,4 @@
-module Foreign.Pug (HtmlBody(..), compileFile, renderFile) where
+module Foreign.Pug (compileFile, renderFile) where
 
 import Prelude
 
@@ -7,24 +7,10 @@ import Data.Function.Uncurried (Fn1, Fn2, runFn1, runFn2)
 import Data.Functor.Contravariant (cmap)
 import Data.Newtype (un)
 import Data.Op (Op(..))
+import Data.Body (HtmlBody)
 import Effect (Effect)
 import Foreign.Object (Object)
-import HTTPure (header)
-import HTTPure.Body (class Body, defaultHeaders, write)
 import Node.Path (FilePath)
-
--- TODO: This should not be in this module, create a seperate module
-newtype HtmlBody = HtmlBody String
-
-instance Body HtmlBody where
-  defaultHeaders (HtmlBody htmlString) =
-    append htmlHeader <$> defaultHeaders htmlString
-    where
-    htmlHeader = header "Content-Type" "text/html; charset=utf-8"
-  write (HtmlBody htmlString) r = write htmlString r
-
-instance EncodeJson HtmlBody where
-  encodeJson (HtmlBody htmlString) = encodeJson htmlString
 
 compileFile :: FilePath -> Effect (Object Json -> HtmlBody)
 compileFile =
