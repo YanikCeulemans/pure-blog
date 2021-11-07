@@ -296,6 +296,7 @@ statusToString 400 = "Bad request"
 statusToString 404 = "Not found"
 statusToString _ = "Unknown status code"
 
+-- TODO: Refactor and improve error handling
 respondWithError
   :: forall m
    . MonadAsk Env m

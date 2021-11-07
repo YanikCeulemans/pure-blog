@@ -13,10 +13,13 @@ import Prelude
 import Data.Argonaut as Json
 import Data.Array (mapMaybe)
 import Data.Array as Array
+import Data.Int as Int
 import Data.List ((:))
 import Data.List as List
 import Data.Maybe (Maybe(..))
+import Data.Newtype (un)
 import Data.String as String
+import Data.Time.Duration (Days(..), Seconds(..), convertDuration)
 import Data.Tuple (Tuple(..))
 import HTTPure.Body (class Body)
 import HTTPure.Body as HTTPureBody
@@ -76,6 +79,13 @@ assetBody filePath b = AssetBody { mimeType, buffer: b }
   mimeTypeFromExtension "css" = Just TextCss
   mimeTypeFromExtension _ = Nothing
 
+assetMaxAgeInSeconds :: Int
+assetMaxAgeInSeconds =
+  Days 1.0
+    # convertDuration
+    # un Seconds
+    # Int.round
+
 instance Body AssetBody where
   write (AssetBody { buffer }) r = HTTPureBody.write buffer r
   defaultHeaders (AssetBody { mimeType, buffer }) =
@@ -86,6 +96,9 @@ instance Body AssetBody where
       TextCss -> "text/css; charset=utf-8"
       ImagePng -> "image/png"
     assetHeaders =
-      [ contentTypeMaybe <#> Tuple "Content-Type" ]
+      [ contentTypeMaybe <#> Tuple "Content-Type"
+      , Just $ Tuple "Cache-Control" $ "public, max-age=" <>
+          show assetMaxAgeInSeconds
+      ]
         # mapMaybe identity
         # HTTPureHeaders.headers
