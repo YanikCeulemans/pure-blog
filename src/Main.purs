@@ -83,8 +83,7 @@ reportAndRenderErrorPage error = do
   errorPage <- liftEffect
     $ Pug.renderFile "./static/pages/error.pug"
         { error:
-            { status: 500
-            , statusMessage: "Internal server error"
+            { message: "An error occurred on our end, sorry. We monitor these errors to fix them as fast as possible. Please try again later."
             , debugMessage
             }
         }
@@ -135,27 +134,41 @@ loggerMiddleware router request = do
     ]
   pure response
 
-indexRouter
-  :: forall m
-   . MonadAsk Env m
-  => MonadAff m
+data Route
+  = IndexRoute
+  | CssRoute String
+  | BlogRoute String
+  | AssetsRoute String
+  | NotFoundRoute String
+
+requestToRoute :: HTTPure.Request -> Route
+requestToRoute { path } = case path of
+  [] -> IndexRoute
+  [ "css", cssName ] -> CssRoute cssName
+  [ "blog", unvalidatedSlug ] -> BlogRoute unvalidatedSlug
+  other ->
+    case List.fromFoldable other of
+      "assets" : assetPath -> AssetsRoute $ intercalate "/" assetPath
+      _ -> NotFoundRoute $ intercalate "/" other
+
+routeHandler ::
+  forall m
+   . MonadAff m
+  => MonadAsk Env m
   => LogMessages m
   => Now m
   => ReadBlogPosts m
   => RenderMarkdown m
   => RenderPug m
   => ReadAssets m
-  => HTTPure.Request
+  => Route
   -> m HTTPure.Response
-indexRouter request = do
-  case request.path of
-    [] -> indexHandler
-    [ "css", cssName ] -> cssHandler cssName
-    [ "blog", unvalidatedSlug ] -> blogPostHandler unvalidatedSlug
-    _ ->
-      case List.fromFoldable request.path of
-        "assets" : assetPath -> fileHandler $ intercalate "/" assetPath
-        _ -> respondWithError $ NotFound $ intercalate "/" request.path
+routeHandler = case _ of
+  IndexRoute -> indexHandler
+  CssRoute name -> cssHandler name
+  BlogRoute unvalidatedSlug -> blogPostHandler unvalidatedSlug
+  AssetsRoute assetPath -> fileHandler assetPath
+  NotFoundRoute path -> respondWithError $ NotFound path
 
 cssHandler
   :: forall m. MonadAff m => MonadAsk Env m => String -> m HTTPure.Response
@@ -360,7 +373,7 @@ main = do
     ( appMMiddleware environment
         $ loggerMiddleware
         $ catchErrorMiddleware
-        $ indexRouter
+        $ (requestToRoute >>> routeHandler)
     )
     do
       Console.log
